@@ -139,7 +139,7 @@ export default function VolunteerDashboard() {
       <TouchableOpacity
         style={[styles.dockedButton, { backgroundColor: theme.primary }]}
         activeOpacity={0.8}
-        // onPress={() => router.push("/(volunteer)/scanner")}
+        onPress={() => router.push("/(volunteer)/scanner")}
       >
         <Ionicons name="qr-code-outline" size={24} color={theme.surface} />
         <Text style={[styles.dockedButtonText, { color: theme.surface }]}>

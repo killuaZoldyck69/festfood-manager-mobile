@@ -1,8 +1,8 @@
 import { useRouter, useSegments } from "expo-router";
-import React, { createContext, useContext, useEffect, useState } from "react";
-import { authService } from "../services/authService";
+import React, { createContext, useContext, useEffect } from "react";
+import { authClient } from "../lib/auth-client";
 
-type Role = "ADMIN" | "VOLUNTEER";
+type Role = "ADMIN" | "VOLUNTEER" | "admin" | "volunteer";
 
 interface User {
   id: string;
@@ -21,61 +21,51 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  // Use the official hook! It handles the token fetching automatically.
+  const { data, isPending } = authClient.useSession();
   const segments = useSegments();
   const router = useRouter();
 
-  // Check if a session exists when the app boots up
-  useEffect(() => {
-    checkSession();
-  }, []);
+  const user = data?.user as User | undefined;
 
-  // Route protection logic
+  // Smarter Route protection logic
   useEffect(() => {
-    if (isLoading) return;
+    if (isPending) return;
 
     const inAuthGroup =
       segments[0] === "(admin)" || segments[0] === "(volunteer)";
 
     if (!user && inAuthGroup) {
-      // Kick them out if they aren't logged in but trying to access protected tabs
       router.replace("/");
-    } else if (user && segments[0] === undefined) {
-      // Route them to their specific dashboard if they are logged in and on the index screen
-      router.replace(
-        user.role === "ADMIN" ? "/(admin)/dashboard" : "/(volunteer)/dashboard",
-      );
-    }
-  }, [user, segments, isLoading]);
+    } else if (user) {
+      const isAdminUser = user.role === "ADMIN" || user.role === "admin";
+      const isCorrectGroup =
+        (isAdminUser && segments[0] === "(admin)") ||
+        (!isAdminUser && segments[0] === "(volunteer)");
 
-  const checkSession = async () => {
-    try {
-      const sessionData = await authService.getSession();
-      if (sessionData && sessionData.user) {
-        setUser(sessionData.user);
+      if (!isCorrectGroup) {
+        router.replace(
+          isAdminUser ? "/(admin)/dashboard" : "/(volunteer)/dashboard",
+        );
       }
-    } catch (error) {
-      console.error("Session check failed", error);
-    } finally {
-      setIsLoading(false);
     }
-  };
+  }, [user, segments, isPending]);
 
+  // Wrapper functions to keep your index.tsx exactly the same
   const signIn = async (email: string, password: string) => {
-    const data = await authService.signIn(email, password);
-    // Assuming BetterAuth returns the user object upon login
-    setUser(data.user);
+    const { error } = await authClient.signIn.email({ email, password });
+    if (error) throw new Error(error.message);
   };
 
   const signOut = async () => {
-    await authService.signOut();
-    setUser(null);
+    await authClient.signOut();
     router.replace("/");
   };
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, signIn, signOut }}>
+    <AuthContext.Provider
+      value={{ user: user || null, isLoading: isPending, signIn, signOut }}
+    >
       {children}
     </AuthContext.Provider>
   );
