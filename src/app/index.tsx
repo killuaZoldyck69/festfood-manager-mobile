@@ -1,10 +1,11 @@
 import { InputField } from "@/components/ui/InputField";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
 import { FONTS } from "@/constants/theme";
+import { useAuth } from "@/context/AuthContext"; // <-- Import useAuth
 import { useTheme } from "@/hooks/use-theme";
-import { useRouter } from "expo-router";
 import { useState } from "react";
 import {
+  Alert,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -14,26 +15,25 @@ import {
 } from "react-native";
 
 export default function GlobalLoginScreen() {
-  const router = useRouter();
   const theme = useTheme();
+  const { signIn } = useAuth();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleSignIn = () => {
+  const handleSignIn = async () => {
     setLoading(true);
-
-    // Mock routing based on your sequence diagram & roles
-    setTimeout(() => {
+    try {
+      await signIn(email, password);
+    } catch (error) {
+      Alert.alert(
+        "Login Failed",
+        "Please check your credentials and try again.",
+      );
+    } finally {
       setLoading(false);
-      const mockRole = email.includes("admin") ? "ADMIN" : "VOLUNTEER";
-      if (mockRole === "ADMIN") {
-        // router.replace("/(admin)/dashboard");
-      } else {
-        // router.replace("/(volunteer)/dashboard");
-      }
-    }, 800);
+    }
   };
 
   return (
