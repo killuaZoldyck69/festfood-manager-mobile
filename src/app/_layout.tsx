@@ -1,16 +1,26 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import React from 'react';
-import { useColorScheme } from 'react-native';
+import { useTheme } from "@/hooks/use-theme";
+import { Stack } from "expo-router";
+import { StatusBar } from "expo-status-bar";
 
-import { AnimatedSplashOverlay } from '@/components/animated-icon';
-import AppTabs from '@/components/app-tabs';
+export default function RootLayout() {
+  const theme = useTheme();
 
-export default function TabLayout() {
-  const colorScheme = useColorScheme();
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <AnimatedSplashOverlay />
-      <AppTabs />
-    </ThemeProvider>
+    <>
+      <StatusBar style="auto" />
+      <Stack
+        screenOptions={{
+          headerShown: false, // We hide the default headers to use our own UI
+          contentStyle: { backgroundColor: theme.background },
+        }}
+      >
+        {/* The 1. Global Login Screen */}
+        <Stack.Screen name="index" />
+
+        {/* The Route Groups */}
+        <Stack.Screen name="(admin)" />
+        <Stack.Screen name="(volunteer)" />
+      </Stack>
+    </>
   );
 }
