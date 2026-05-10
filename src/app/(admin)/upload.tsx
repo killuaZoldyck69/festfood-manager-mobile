@@ -95,6 +95,17 @@ export default function AdminUploadScreen() {
       clearInterval(progressInterval);
       const data = await response.json();
 
+      // 💥 NEW: SPECIFIC GRACEFUL ERROR HANDLING FOR DUPLICATES
+      if (response.status === 409) {
+        setStatus("idle"); // Reset the UI so they can upload a different file
+        Alert.alert(
+          "Upload Skipped 🛡️",
+          data.message || "Everyone in this file is already registered!",
+          [{ text: "Got it", style: "default" }],
+        );
+        return; // Stop execution here so it doesn't trigger a generic error
+      }
+
       if (!response.ok || !data.pdfBase64) {
         throw new Error(
           data.error || "Failed to process CSV and generate tickets.",

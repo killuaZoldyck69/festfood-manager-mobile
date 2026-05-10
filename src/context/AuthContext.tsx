@@ -45,7 +45,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (!isCorrectGroup) {
         router.replace(
-          isAdminUser ? "/(admin)/dashboard" : "/(volunteer)/dashboard",
+          isAdminUser ? "/(admin)/inventory" : "/(volunteer)/inventory",
         );
       }
     }
