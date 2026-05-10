@@ -1,11 +1,13 @@
 // app/(admin)/directory.tsx
 import { FONTS, SIZES } from "@/constants/theme";
 import { useTheme } from "@/hooks/use-theme";
+import { apiClient } from "@/utils/apiClient";
 import { Feather } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";
 import React, { useCallback, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Modal,
   Platform,
@@ -17,9 +19,6 @@ import {
   View,
 } from "react-native";
 
-import { apiClient } from "@/utils/apiClient";
-
-// 🔴 THE FIX: Updated interface to include scannerName and scannerRole
 interface Attendee {
   id: string;
   name: string;
@@ -54,6 +53,10 @@ export default function AdminDirectoryScreen() {
   const [selectedAttendee, setSelectedAttendee] = useState<Attendee | null>(
     null,
   );
+
+  // 🔴 NEW: State to control the confirmation modal
+  const [claimConfirmAttendee, setClaimConfirmAttendee] =
+    useState<Attendee | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -97,6 +100,51 @@ export default function AdminDirectoryScreen() {
       return () => clearTimeout(delayDebounceFn);
     }, [searchQuery]),
   );
+
+  // 🔴 UPDATED: Now executes using the state from the confirmation modal
+  const handleManualClaim = async () => {
+    if (!claimConfirmAttendee) return;
+
+    const attendeeId = claimConfirmAttendee.id;
+    const previousAttendees = [...attendees];
+
+    // Close the confirmation modal instantly
+    setClaimConfirmAttendee(null);
+
+    // Optimistic UI Update
+    const now = new Date().toISOString();
+    setAttendees((prev) =>
+      prev.map((attendee) =>
+        attendee.id === attendeeId
+          ? {
+              ...attendee,
+              foodClaimed: true,
+              claimedAt: now,
+              scannerName: "Manual Override",
+              scannerRole: "ADMIN",
+            }
+          : attendee,
+      ),
+    );
+
+    try {
+      const response = await apiClient("/admin/override", {
+        method: "POST",
+        body: JSON.stringify({ attendeeId }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to process manual override.");
+      }
+    } catch (error: any) {
+      console.error("Manual Claim Error:", error);
+      Alert.alert(
+        "Override Failed",
+        "Could not mark attendee as claimed. Please check your connection. Reverting change.",
+      );
+      setAttendees(previousAttendees);
+    }
+  };
 
   const safeAttendees = Array.isArray(attendees) ? attendees : [];
 
@@ -153,7 +201,7 @@ export default function AdminDirectoryScreen() {
         ) : (
           <TouchableOpacity
             style={[styles.manualClaimBtn, { borderColor: theme.primary }]}
-            onPress={() => console.log("Trigger Manual Claim API:", item.id)}
+            onPress={() => setClaimConfirmAttendee(item)} // 🔴 Triggers the confirmation modal
           >
             <Text style={[styles.manualClaimText, { color: theme.primary }]}>
               Manual Claim
@@ -248,6 +296,71 @@ export default function AdminDirectoryScreen() {
         )}
       </View>
 
+      {/* 🔴 NEW: CONFIRMATION MODAL */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={!!claimConfirmAttendee}
+        onRequestClose={() => setClaimConfirmAttendee(null)}
+      >
+        <View style={styles.centerModalOverlay}>
+          <View
+            style={[
+              styles.confirmModalCard,
+              { backgroundColor: theme.background },
+            ]}
+          >
+            <View
+              style={[
+                styles.warningIconBg,
+                { backgroundColor: `${theme.primary}15` },
+              ]}
+            >
+              <Feather name="alert-circle" size={32} color={theme.primary} />
+            </View>
+
+            <Text style={[styles.confirmModalTitle, { color: theme.textMain }]}>
+              Manual Override
+            </Text>
+
+            <Text style={[styles.confirmModalText, { color: theme.textMuted }]}>
+              Are you sure you want to mark{" "}
+              <Text style={{ color: theme.textMain, fontWeight: "700" }}>
+                {claimConfirmAttendee?.name}
+              </Text>
+              's ticket as claimed?
+            </Text>
+
+            <View style={styles.confirmModalActions}>
+              <TouchableOpacity
+                style={[
+                  styles.confirmBtn,
+                  styles.cancelBtn,
+                  { borderColor: theme.border },
+                ]}
+                onPress={() => setClaimConfirmAttendee(null)}
+              >
+                <Text style={[styles.cancelBtnText, { color: theme.textMain }]}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.confirmBtn,
+                  styles.acceptBtn,
+                  { backgroundColor: theme.primary },
+                ]}
+                onPress={handleManualClaim}
+              >
+                <Text style={styles.acceptBtnText}>Confirm Claim</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* EXISTING: Bottom Sheet Modal for Attendee Details */}
       <Modal
         animationType="slide"
         transparent={true}
@@ -357,7 +470,6 @@ export default function AdminDirectoryScreen() {
                     </View>
                   </View>
 
-                  {/* 🔴 THE FIX: Now using scannerName and scannerRole for the UI */}
                   {selectedAttendee.foodClaimed && (
                     <View style={styles.auditNode}>
                       <View style={styles.auditTimeline}>
@@ -476,6 +588,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   manualClaimText: { ...FONTS.body, fontSize: 12, fontWeight: "600" },
+
+  // Existing Bottom Sheet Modal Styles
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.4)",
@@ -537,4 +651,57 @@ const styles = StyleSheet.create({
   auditDetails: { flex: 1, paddingBottom: 24 },
   auditTime: { ...FONTS.body, fontSize: 16, marginBottom: 4 },
   auditDesc: { ...FONTS.body, fontSize: 14, lineHeight: 20 },
+
+  // 🔴 NEW: Confirmation Modal Styles
+  centerModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: SIZES.padding,
+  },
+  confirmModalCard: {
+    width: "100%",
+    padding: 24,
+    borderRadius: 24,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 10,
+  },
+  warningIconBg: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  confirmModalTitle: { ...FONTS.header, fontSize: 22, marginBottom: 8 },
+  confirmModalText: {
+    ...FONTS.body,
+    fontSize: 15,
+    textAlign: "center",
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  confirmModalActions: { flexDirection: "row", width: "100%", gap: 12 },
+  confirmBtn: {
+    flex: 1,
+    height: 50,
+    borderRadius: SIZES.radius,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  cancelBtn: { borderWidth: 1 },
+  acceptBtn: {},
+  cancelBtnText: { ...FONTS.body, fontWeight: "600", fontSize: 15 },
+  acceptBtnText: {
+    color: "#FFF",
+    ...FONTS.body,
+    fontWeight: "700",
+    fontSize: 15,
+  },
 });

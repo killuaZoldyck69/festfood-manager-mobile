@@ -91,12 +91,12 @@ export default function AdminLayout() {
       />
 
       <Tabs.Screen
-        name="settings"
+        name="logs"
         options={{
-          title: "Settings",
-          tabBarLabel: "Settings",
+          title: "System Audit Logs",
+          tabBarLabel: "Logs",
           tabBarIcon: ({ color, size }) => (
-            <Feather name="settings" size={size} color={color} />
+            <Feather name="file-text" size={size} color={color} />
           ),
         }}
       />
