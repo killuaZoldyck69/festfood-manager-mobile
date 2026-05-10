@@ -1,5 +1,7 @@
 import { useRouter, useSegments } from "expo-router";
+import * as SecureStore from "expo-secure-store"; // <-- ADD THIS
 import React, { createContext, useContext, useEffect } from "react";
+import { Platform } from "react-native"; // <-- ADD THIS
 import { authClient } from "../lib/auth-client";
 
 type Role = "ADMIN" | "VOLUNTEER" | "admin" | "volunteer";
@@ -21,14 +23,12 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  // Use the official hook! It handles the token fetching automatically.
   const { data, isPending } = authClient.useSession();
   const segments = useSegments();
   const router = useRouter();
 
   const user = data?.user as User | undefined;
 
-  // Smarter Route protection logic
   useEffect(() => {
     if (isPending) return;
 
@@ -51,14 +51,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [user, segments, isPending]);
 
-  // Wrapper functions to keep your index.tsx exactly the same
+  // 🔴 THE FIX: Manually handle the mobile token
   const signIn = async (email: string, password: string) => {
-    const { error } = await authClient.signIn.email({ email, password });
+    const { data: authData, error } = await authClient.signIn.email({
+      email,
+      password,
+    });
+
     if (error) throw new Error(error.message);
+
+    // Save the token physically so apiClient.ts can read it on mobile!
+    if (authData && Platform.OS !== "web" && authData.token) {
+      await SecureStore.setItemAsync(
+        "better-auth.session_token",
+        authData.token,
+      );
+    }
   };
 
   const signOut = async () => {
     await authClient.signOut();
+
+    // Clean up the physical token
+    if (Platform.OS !== "web") {
+      await SecureStore.deleteItemAsync("better-auth.session_token");
+    }
+
     router.replace("/");
   };
 
