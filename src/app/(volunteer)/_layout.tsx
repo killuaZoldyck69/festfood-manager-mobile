@@ -30,9 +30,9 @@ export default function VolunteerLayout() {
         },
       }}
     >
-      {/* Tab 1: Volunteer Dashboard */}
+      {/* Change this from "dashboard" to "inventory" */}
       <Tabs.Screen
-        name="dashboard"
+        name="inventory"
         options={{
           title: "My Dashboard",
           tabBarLabel: "Home",

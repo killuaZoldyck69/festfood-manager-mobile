@@ -1,11 +1,10 @@
-// app/(admin)/dashboard.tsx
 import { FONTS, SIZES } from "@/constants/theme";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/use-theme";
 import { apiClient } from "@/utils/apiClient";
 import { Feather } from "@expo/vector-icons";
-import { useFocusEffect } from "expo-router"; // 🔴 IMPORT ADDED
-import React, { useCallback, useState } from "react"; // 🔴 IMPORT UPDATED
+import { useFocusEffect } from "expo-router";
+import React, { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -27,28 +26,33 @@ interface InventoryStats {
 }
 
 const MOCK_STATS: InventoryStats = {
-  available: 500,
-  served: 375,
-  duplicates: 12,
-  invalid: 3,
+  available: 0,
+  served: 0,
+  duplicates: 0,
+  invalid: 0,
 };
 
-export default function AdminDashboardScreen() {
+// 🔴 We define the props to accept the user's role
+interface InventoryScreenProps {
+  role: "ADMIN" | "VOLUNTEER";
+}
+
+export default function InventoryScreen({ role }: InventoryScreenProps) {
   const theme = useTheme();
   const { signOut } = useAuth();
 
   const [stats, setStats] = useState<InventoryStats>(MOCK_STATS);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [isUpdating, setIsUpdating] = useState(false);
 
+  // Admin-only states
+  const [isUpdating, setIsUpdating] = useState(false);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [inventoryInput, setInventoryInput] = useState("0");
 
   const fetchInventory = async () => {
     try {
       const response = await apiClient("/inventory", { method: "GET" });
-
       if (response.ok) {
         const data = await response.json();
         setStats({
@@ -59,19 +63,15 @@ export default function AdminDashboardScreen() {
             data?.duplicates ?? data?.duplicateScans ?? MOCK_STATS.duplicates,
           invalid: data?.invalid ?? data?.invalidTickets ?? MOCK_STATS.invalid,
         });
-      } else {
-        setStats(MOCK_STATS);
       }
     } catch (error) {
       console.error("Failed to fetch inventory:", error);
-      setStats(MOCK_STATS);
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
     }
   };
 
-  // 🔴 THE FIX: Replace useEffect with useFocusEffect
   useFocusEffect(
     useCallback(() => {
       fetchInventory();
@@ -83,6 +83,7 @@ export default function AdminDashboardScreen() {
     fetchInventory();
   };
 
+  // Admin-only functions
   const openModal = () => {
     setInventoryInput((stats?.available ?? 0).toString());
     setIsModalVisible(true);
@@ -109,16 +110,12 @@ export default function AdminDashboardScreen() {
         body: JSON.stringify({ totalAvailable: newValue }),
       });
 
-      if (!response.ok) {
-        throw new Error(
-          `Failed to update inventory. Status: ${response.status}`,
-        );
-      }
+      if (!response.ok) throw new Error("Failed to update inventory.");
     } catch (error) {
       console.error("PUT Error:", error);
       Alert.alert(
         "Update Failed",
-        "Could not reach the server or unauthorized. Reverting value.",
+        "Could not reach the server. Reverting value.",
       );
       setStats((prev) => ({ ...prev, available: previousAvailable }));
     } finally {
@@ -153,8 +150,8 @@ export default function AdminDashboardScreen() {
         </View>
 
         <View style={styles.headerRight}>
-          <View style={[styles.adminBadge, { backgroundColor: theme.primary }]}>
-            <Text style={styles.adminBadgeText}>ADMIN</Text>
+          <View style={[styles.roleBadge, { backgroundColor: theme.primary }]}>
+            <Text style={styles.roleBadgeText}>{role}</Text>
           </View>
           <TouchableOpacity onPress={signOut} style={styles.logoutBtn}>
             <Feather name="log-out" size={24} color={theme.textMain} />
@@ -216,7 +213,6 @@ export default function AdminDashboardScreen() {
                   {stats?.available ?? 0}
                 </Text>
               </View>
-
               <View
                 style={[styles.gridCard, { backgroundColor: theme.surface }]}
               >
@@ -227,7 +223,6 @@ export default function AdminDashboardScreen() {
                   {stats?.served ?? 0}
                 </Text>
               </View>
-
               <View
                 style={[styles.gridCard, { backgroundColor: theme.surface }]}
               >
@@ -238,7 +233,6 @@ export default function AdminDashboardScreen() {
                   {stats?.duplicates ?? 0}
                 </Text>
               </View>
-
               <View
                 style={[styles.gridCard, { backgroundColor: theme.surface }]}
               >
@@ -251,133 +245,141 @@ export default function AdminDashboardScreen() {
               </View>
             </View>
 
-            <TouchableOpacity
-              style={[styles.adjustBtn, { borderColor: theme.primary }]}
-              activeOpacity={0.7}
-              onPress={openModal}
-            >
-              <Feather
-                name="code"
-                size={20}
-                color={theme.primary}
-                style={{ transform: [{ rotate: "90deg" }] }}
-              />
-              <Text style={[styles.adjustBtnText, { color: theme.primary }]}>
-                Adjust Total Inventory
-              </Text>
-            </TouchableOpacity>
+            {/* 🔴 Conditional Rendering: Only show to ADMIN */}
+            {role === "ADMIN" && (
+              <TouchableOpacity
+                style={[styles.adjustBtn, { borderColor: theme.primary }]}
+                activeOpacity={0.7}
+                onPress={openModal}
+              >
+                <Feather
+                  name="code"
+                  size={20}
+                  color={theme.primary}
+                  style={{ transform: [{ rotate: "90deg" }] }}
+                />
+                <Text style={[styles.adjustBtnText, { color: theme.primary }]}>
+                  Adjust Total Inventory
+                </Text>
+              </TouchableOpacity>
+            )}
 
             <View style={{ height: 100 }} />
           </>
         )}
       </ScrollView>
 
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={isModalVisible}
-        onRequestClose={() => setIsModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <TouchableOpacity
-            style={StyleSheet.absoluteFillObject}
-            activeOpacity={1}
-            onPress={() => setIsModalVisible(false)}
-          />
-
-          <View
-            style={[styles.modalContent, { backgroundColor: theme.background }]}
-          >
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: theme.textMain }]}>
-                Update Logistics
-              </Text>
-              <TouchableOpacity onPress={() => setIsModalVisible(false)}>
-                <Feather name="x" size={24} color={theme.textMain} />
-              </TouchableOpacity>
-            </View>
-
+      {/* 🔴 Conditional Rendering: Only mount Modal for ADMIN */}
+      {role === "ADMIN" && (
+        <Modal
+          animationType="slide"
+          transparent={true}
+          visible={isModalVisible}
+          onRequestClose={() => setIsModalVisible(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <TouchableOpacity
+              style={StyleSheet.absoluteFillObject}
+              activeOpacity={1}
+              onPress={() => setIsModalVisible(false)}
+            />
             <View
               style={[
-                styles.readOnlyRow,
-                { backgroundColor: `${theme.primary}05` },
+                styles.modalContent,
+                { backgroundColor: theme.background },
               ]}
             >
-              <Text style={[styles.readOnlyLabel, { color: theme.textMuted }]}>
-                Current Available
-              </Text>
-              <Text style={[styles.readOnlyValue, { color: theme.primary }]}>
-                {stats?.available ?? 0}
-              </Text>
-            </View>
+              <View style={styles.modalHeader}>
+                <Text style={[styles.modalTitle, { color: theme.textMain }]}>
+                  Update Logistics
+                </Text>
+                <TouchableOpacity onPress={() => setIsModalVisible(false)}>
+                  <Feather name="x" size={24} color={theme.textMain} />
+                </TouchableOpacity>
+              </View>
 
-            <Text style={[styles.inputLabel, { color: theme.textMain }]}>
-              Total Inventory
-            </Text>
-            <View style={styles.inputRow}>
-              <TouchableOpacity
+              <View
                 style={[
-                  styles.adjustCircle,
-                  { backgroundColor: theme.surface },
+                  styles.readOnlyRow,
+                  { backgroundColor: `${theme.primary}05` },
                 ]}
-                onPress={() => adjustInventory(-10)}
               >
                 <Text
-                  style={[styles.adjustCircleText, { color: theme.textMain }]}
+                  style={[styles.readOnlyLabel, { color: theme.textMuted }]}
                 >
-                  -10
+                  Current Available
                 </Text>
-              </TouchableOpacity>
+                <Text style={[styles.readOnlyValue, { color: theme.primary }]}>
+                  {stats?.available ?? 0}
+                </Text>
+              </View>
 
-              <TextInput
-                style={[
-                  styles.numberInput,
-                  {
-                    backgroundColor: theme.surface,
-                    color: theme.textMain,
-                    borderColor: theme.border,
-                  },
-                ]}
-                keyboardType="number-pad"
-                value={inventoryInput}
-                onChangeText={setInventoryInput}
-                textAlign="center"
-              />
+              <Text style={[styles.inputLabel, { color: theme.textMain }]}>
+                Total Inventory
+              </Text>
+              <View style={styles.inputRow}>
+                <TouchableOpacity
+                  style={[
+                    styles.adjustCircle,
+                    { backgroundColor: theme.surface },
+                  ]}
+                  onPress={() => adjustInventory(-10)}
+                >
+                  <Text
+                    style={[styles.adjustCircleText, { color: theme.textMain }]}
+                  >
+                    -10
+                  </Text>
+                </TouchableOpacity>
+                <TextInput
+                  style={[
+                    styles.numberInput,
+                    {
+                      backgroundColor: theme.surface,
+                      color: theme.textMain,
+                      borderColor: theme.border,
+                    },
+                  ]}
+                  keyboardType="number-pad"
+                  value={inventoryInput}
+                  onChangeText={setInventoryInput}
+                  textAlign="center"
+                />
+                <TouchableOpacity
+                  style={[
+                    styles.adjustCircle,
+                    { backgroundColor: theme.surface },
+                  ]}
+                  onPress={() => adjustInventory(10)}
+                >
+                  <Text
+                    style={[styles.adjustCircleText, { color: theme.textMain }]}
+                  >
+                    +10
+                  </Text>
+                </TouchableOpacity>
+              </View>
 
               <TouchableOpacity
                 style={[
-                  styles.adjustCircle,
-                  { backgroundColor: theme.surface },
+                  styles.submitBtn,
+                  { backgroundColor: theme.primary },
+                  isUpdating && { opacity: 0.7 },
                 ]}
-                onPress={() => adjustInventory(10)}
+                activeOpacity={0.8}
+                onPress={submitInventoryUpdate}
+                disabled={isUpdating}
               >
-                <Text
-                  style={[styles.adjustCircleText, { color: theme.textMain }]}
-                >
-                  +10
-                </Text>
+                {isUpdating ? (
+                  <ActivityIndicator color="#FFF" />
+                ) : (
+                  <Text style={styles.submitBtnText}>Update Inventory</Text>
+                )}
               </TouchableOpacity>
             </View>
-
-            <TouchableOpacity
-              style={[
-                styles.submitBtn,
-                { backgroundColor: theme.primary },
-                isUpdating && { opacity: 0.7 },
-              ]}
-              activeOpacity={0.8}
-              onPress={submitInventoryUpdate}
-              disabled={isUpdating}
-            >
-              {isUpdating ? (
-                <ActivityIndicator color="#FFF" />
-              ) : (
-                <Text style={styles.submitBtnText}>Update Inventory</Text>
-              )}
-            </TouchableOpacity>
           </View>
-        </View>
-      </Modal>
+        </Modal>
+      )}
     </View>
   );
 }
@@ -395,13 +397,15 @@ const styles = StyleSheet.create({
   headerLeft: { flexDirection: "row", alignItems: "center" },
   headerTitle: { ...FONTS.header, fontSize: 24, lineHeight: 28 },
   headerRight: { flexDirection: "row", alignItems: "center" },
-  adminBadge: {
+  roleBadge: {
+    // 🔴 Renamed
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 16,
     marginRight: 12,
   },
-  adminBadgeText: {
+  roleBadgeText: {
+    // 🔴 Renamed
     color: "#FFF",
     ...FONTS.body,
     fontSize: 11,

@@ -32,12 +32,12 @@ export default function AdminLayout() {
       }}
     >
       <Tabs.Screen
-        name="dashboard"
+        name="inventory"
         options={{
-          title: "Command Center",
+          title: "My Dashboard",
           tabBarLabel: "Home",
           tabBarIcon: ({ color, size }) => (
-            <Feather name="grid" size={size} color={color} />
+            <Feather name="home" size={size} color={color} />
           ),
         }}
       />
