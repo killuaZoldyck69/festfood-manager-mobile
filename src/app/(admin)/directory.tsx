@@ -1,7 +1,7 @@
 import { useTheme } from "@/hooks/use-theme";
 import { Text, View } from "react-native";
 
-export default function AdminDashboardScreen() {
+export default function AdminDirectoryScreen() {
   const theme = useTheme();
   return (
     <View
@@ -13,7 +13,7 @@ export default function AdminDashboardScreen() {
       }}
     >
       <Text style={{ color: theme.textMain, fontSize: 18 }}>
-        Admin Dashboard Stub
+        Attendee Directory Stub
       </Text>
     </View>
   );
