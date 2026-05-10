@@ -4,7 +4,8 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/use-theme";
 import { apiClient } from "@/utils/apiClient";
 import { Feather } from "@expo/vector-icons";
-import React, { useEffect, useState } from "react";
+import { useFocusEffect } from "expo-router"; // 🔴 IMPORT ADDED
+import React, { useCallback, useState } from "react"; // 🔴 IMPORT UPDATED
 import {
   ActivityIndicator,
   Alert,
@@ -70,9 +71,12 @@ export default function AdminDashboardScreen() {
     }
   };
 
-  useEffect(() => {
-    fetchInventory();
-  }, []);
+  // 🔴 THE FIX: Replace useEffect with useFocusEffect
+  useFocusEffect(
+    useCallback(() => {
+      fetchInventory();
+    }, []),
+  );
 
   const onRefresh = () => {
     setIsRefreshing(true);

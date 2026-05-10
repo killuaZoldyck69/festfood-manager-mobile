@@ -2,7 +2,8 @@
 import { FONTS, SIZES } from "@/constants/theme";
 import { useTheme } from "@/hooks/use-theme";
 import { Feather } from "@expo/vector-icons";
-import React, { useEffect, useState } from "react";
+import { useFocusEffect } from "expo-router";
+import React, { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -16,102 +17,108 @@ import {
   View,
 } from "react-native";
 
-// 👇 Import the central API Client
 import { apiClient } from "@/utils/apiClient";
 
-// Type definition based on your database schema
+// 🔴 THE FIX: Updated interface to include scannerName and scannerRole
 interface Attendee {
   id: string;
   name: string;
   university: string;
+  role: string;
   category: string;
-  status: "CLAIMED" | "PENDING";
-  claimedAt?: string; // ISO String or formatted time
-  scannedBy?: string;
+  qrToken: string;
+  foodClaimed: boolean;
+  claimedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  scannerName?: string | null;
+  scannerRole?: string | null;
 }
 
 type FilterTab = "ALL" | "CLAIMED" | "PENDING";
 
+const formatTime = (isoString: string | null) => {
+  if (!isoString) return "";
+  const date = new Date(isoString);
+  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+};
+
 export default function AdminDirectoryScreen() {
   const theme = useTheme();
 
-  // Screen State
   const [attendees, setAttendees] = useState<Attendee[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<FilterTab>("ALL");
 
-  // Modal State
   const [selectedAttendee, setSelectedAttendee] = useState<Attendee | null>(
     null,
   );
 
-  // 1. Fetch Data with Debounce Strategy
-  useEffect(() => {
-    const fetchAttendees = async () => {
-      setIsLoading(true);
-      try {
-        // 👇 Clean, unified API call that automatically handles Mobile Auth + CSRF
-        const response = await apiClient(
-          `/admin/attendees?search=${encodeURIComponent(searchQuery)}`,
-          { method: "GET" },
-        );
-
-        if (response.ok) {
-          const data = await response.json();
-
-          // Strictly check the shape of the data
-          if (Array.isArray(data)) {
-            setAttendees(data); // Backend returned [...]
-          } else if (data && Array.isArray(data.data)) {
-            setAttendees(data.data); // Backend returned { data: [...] }
-          } else if (data && Array.isArray(data.attendees)) {
-            setAttendees(data.attendees); // Backend returned { attendees: [...] }
-          } else {
-            console.warn("Unexpected API response shape:", data);
-            setAttendees(MOCK_ATTENDEES);
-          }
-        } else {
-          console.warn(
-            "Backend rejected GET request. Status:",
-            response.status,
+  useFocusEffect(
+    useCallback(() => {
+      const fetchAttendees = async () => {
+        setIsLoading(true);
+        try {
+          const response = await apiClient(
+            `/admin/attendees?search=${encodeURIComponent(searchQuery)}`,
+            { method: "GET" },
           );
-          setAttendees(MOCK_ATTENDEES);
+
+          if (response.ok) {
+            const data = await response.json();
+
+            if (Array.isArray(data)) {
+              setAttendees(data);
+            } else if (data && Array.isArray(data.data)) {
+              setAttendees(data.data);
+            } else if (data && Array.isArray(data.attendees)) {
+              setAttendees(data.attendees);
+            } else {
+              setAttendees([]);
+            }
+          } else {
+            console.warn(
+              "Backend rejected GET request. Status:",
+              response.status,
+            );
+          }
+        } catch (error) {
+          console.error("Failed to fetch directory:", error);
+        } finally {
+          setIsLoading(false);
         }
-      } catch (error) {
-        console.error("Failed to fetch directory:", error);
-        setAttendees(MOCK_ATTENDEES);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+      };
 
-    const delayDebounceFn = setTimeout(() => {
-      fetchAttendees();
-    }, 500);
+      const delayDebounceFn = setTimeout(() => {
+        fetchAttendees();
+      }, 500);
 
-    return () => clearTimeout(delayDebounceFn);
-  }, [searchQuery]);
+      return () => clearTimeout(delayDebounceFn);
+    }, [searchQuery]),
+  );
 
-  // 2. Powerful Local Filtering Logic (Fail-Safe)
-  // Force it to treat 'attendees' as an array, even if it glitches
   const safeAttendees = Array.isArray(attendees) ? attendees : [];
 
   const filteredAttendees = safeAttendees.filter((attendee) => {
-    const matchesTab = activeTab === "ALL" || attendee.status === activeTab;
+    const matchesTab =
+      activeTab === "ALL" ||
+      (activeTab === "CLAIMED" && attendee.foodClaimed === true) ||
+      (activeTab === "PENDING" && attendee.foodClaimed === false);
+
     const searchLower = searchQuery.toLowerCase();
     const matchesSearch =
       !searchQuery ||
       attendee.name.toLowerCase().includes(searchLower) ||
       attendee.id.toLowerCase().includes(searchLower) ||
-      attendee.university.toLowerCase().includes(searchLower);
+      (attendee.university &&
+        attendee.university.toLowerCase().includes(searchLower));
 
     return matchesTab && matchesSearch;
   });
 
-  // 3. Render List Item
   const renderAttendee = ({ item }: { item: Attendee }) => {
-    const isClaimed = item.status === "CLAIMED";
+    const isClaimed = item.foodClaimed;
 
     return (
       <TouchableOpacity
@@ -141,7 +148,7 @@ export default function AdminDirectoryScreen() {
 
         {isClaimed ? (
           <Text style={[styles.timeText, { color: theme.textMuted }]}>
-            {item.claimedAt}
+            {formatTime(item.claimedAt)}
           </Text>
         ) : (
           <TouchableOpacity
@@ -159,7 +166,6 @@ export default function AdminDirectoryScreen() {
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.surface }]}>
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.iconBtn}>
           <Feather name="menu" size={24} color={theme.textMain} />
@@ -173,7 +179,6 @@ export default function AdminDirectoryScreen() {
       </View>
 
       <View style={[styles.container, { backgroundColor: theme.background }]}>
-        {/* Search Bar */}
         <View
           style={[styles.searchContainer, { backgroundColor: theme.surface }]}
         >
@@ -192,7 +197,6 @@ export default function AdminDirectoryScreen() {
           />
         </View>
 
-        {/* Segmented Control Tabs */}
         <View
           style={[styles.tabsContainer, { backgroundColor: theme.surface }]}
         >
@@ -229,7 +233,6 @@ export default function AdminDirectoryScreen() {
           })}
         </View>
 
-        {/* List Content */}
         {isLoading && attendees.length === 0 ? (
           <View style={styles.centerContent}>
             <ActivityIndicator size="large" color={theme.primary} />
@@ -245,7 +248,6 @@ export default function AdminDirectoryScreen() {
         )}
       </View>
 
-      {/* Bottom Sheet Modal for Details */}
       <Modal
         animationType="slide"
         transparent={true}
@@ -261,10 +263,8 @@ export default function AdminDirectoryScreen() {
           <View
             style={[styles.modalContent, { backgroundColor: theme.background }]}
           >
-            {/* Drag Handle */}
             <View style={styles.dragHandle} />
 
-            {/* Modal Header */}
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: theme.textMain }]}>
                 Attendee Details
@@ -276,31 +276,26 @@ export default function AdminDirectoryScreen() {
 
             {selectedAttendee && (
               <>
-                {/* Status Badge */}
                 <View
                   style={[
                     styles.statusBadge,
                     {
-                      backgroundColor:
-                        selectedAttendee.status === "CLAIMED"
-                          ? `${theme.success}15`
-                          : `${theme.textMuted}15`,
-                      borderColor:
-                        selectedAttendee.status === "CLAIMED"
-                          ? theme.success
-                          : theme.textMuted,
+                      backgroundColor: selectedAttendee.foodClaimed
+                        ? `${theme.success}15`
+                        : `${theme.textMuted}15`,
+                      borderColor: selectedAttendee.foodClaimed
+                        ? theme.success
+                        : theme.textMuted,
                     },
                   ]}
                 >
                   <Feather
                     name={
-                      selectedAttendee.status === "CLAIMED"
-                        ? "check-circle"
-                        : "clock"
+                      selectedAttendee.foodClaimed ? "check-circle" : "clock"
                     }
                     size={16}
                     color={
-                      selectedAttendee.status === "CLAIMED"
+                      selectedAttendee.foodClaimed
                         ? theme.success
                         : theme.textMuted
                     }
@@ -309,20 +304,18 @@ export default function AdminDirectoryScreen() {
                     style={[
                       styles.statusBadgeText,
                       {
-                        color:
-                          selectedAttendee.status === "CLAIMED"
-                            ? theme.success
-                            : theme.textMuted,
+                        color: selectedAttendee.foodClaimed
+                          ? theme.success
+                          : theme.textMuted,
                       },
                     ]}
                   >
-                    {selectedAttendee.status === "CLAIMED"
+                    {selectedAttendee.foodClaimed
                       ? "ALREADY CLAIMED"
                       : "PENDING CLAIM"}
                   </Text>
                 </View>
 
-                {/* Attendee Info */}
                 <Text style={[styles.detailName, { color: theme.textMain }]}>
                   {selectedAttendee.name}
                 </Text>
@@ -331,12 +324,10 @@ export default function AdminDirectoryScreen() {
                   {selectedAttendee.university.split(" ").slice(-2).join(" ")}
                 </Text>
 
-                {/* Audit Trail */}
                 <Text style={[styles.auditTitle, { color: theme.textMuted }]}>
                   AUDIT TRAIL
                 </Text>
                 <View style={styles.auditContainer}>
-                  {/* Node 1: Generated */}
                   <View style={styles.auditNode}>
                     <View style={styles.auditTimeline}>
                       <View
@@ -356,7 +347,7 @@ export default function AdminDirectoryScreen() {
                       <Text
                         style={[styles.auditTime, { color: theme.textMain }]}
                       >
-                        11:00 AM
+                        {formatTime(selectedAttendee.createdAt)}
                       </Text>
                       <Text
                         style={[styles.auditDesc, { color: theme.textMuted }]}
@@ -366,8 +357,8 @@ export default function AdminDirectoryScreen() {
                     </View>
                   </View>
 
-                  {/* Node 2: Scanned (Only if claimed) */}
-                  {selectedAttendee.status === "CLAIMED" && (
+                  {/* 🔴 THE FIX: Now using scannerName and scannerRole for the UI */}
+                  {selectedAttendee.foodClaimed && (
                     <View style={styles.auditNode}>
                       <View style={styles.auditTimeline}>
                         <View
@@ -381,16 +372,20 @@ export default function AdminDirectoryScreen() {
                         <Text
                           style={[styles.auditTime, { color: theme.textMain }]}
                         >
-                          {selectedAttendee.claimedAt}
+                          {formatTime(selectedAttendee.claimedAt)}
                         </Text>
                         <Text
                           style={[styles.auditDesc, { color: theme.textMuted }]}
                         >
-                          Scanned by Volunteer:{" "}
+                          Scanned by{" "}
+                          {selectedAttendee.scannerRole === "ADMIN"
+                            ? "Admin"
+                            : "Volunteer"}
+                          :{" "}
                           <Text
                             style={{ color: theme.primary, fontWeight: "600" }}
                           >
-                            {selectedAttendee.scannedBy || "System"}
+                            {selectedAttendee.scannerName || "System"}
                           </Text>
                         </Text>
                       </View>
@@ -413,8 +408,6 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1 },
   container: { flex: 1 },
   centerContent: { flex: 1, justifyContent: "center", alignItems: "center" },
-
-  // Header
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -424,8 +417,6 @@ const styles = StyleSheet.create({
   },
   iconBtn: { padding: 4 },
   headerTitle: { ...FONTS.header, fontSize: 22 },
-
-  // Search
   searchContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -437,8 +428,6 @@ const styles = StyleSheet.create({
   },
   searchIcon: { marginRight: 12 },
   searchInput: { flex: 1, ...FONTS.body, fontSize: 16, height: "100%" },
-
-  // Tabs
   tabsContainer: {
     flexDirection: "row",
     marginHorizontal: SIZES.padding,
@@ -453,8 +442,6 @@ const styles = StyleSheet.create({
     borderRadius: SIZES.radius - 4,
   },
   tabText: { ...FONTS.body, fontSize: 13, letterSpacing: 0.5 },
-
-  // List
   listContent: {
     paddingHorizontal: SIZES.padding,
     paddingTop: 8,
@@ -489,8 +476,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   manualClaimText: { ...FONTS.body, fontSize: 12, fontWeight: "600" },
-
-  // Modal
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.4)",
@@ -537,8 +522,6 @@ const styles = StyleSheet.create({
   },
   detailName: { ...FONTS.header, fontSize: 26, marginBottom: 4 },
   detailSub: { ...FONTS.body, fontSize: 15, marginBottom: 32 },
-
-  // Audit Trail
   auditTitle: {
     ...FONTS.muted,
     fontSize: 12,
@@ -555,50 +538,3 @@ const styles = StyleSheet.create({
   auditTime: { ...FONTS.body, fontSize: 16, marginBottom: 4 },
   auditDesc: { ...FONTS.body, fontSize: 14, lineHeight: 20 },
 });
-
-// -----------------------------------------------------
-// MOCK DATA (Used as a fallback if API fails)
-// -----------------------------------------------------
-const MOCK_ATTENDEES: Attendee[] = [
-  {
-    id: "dx-2024-00129",
-    name: "Rakib Ahmed",
-    university: "University of Creative Technology",
-    category: "Datathon",
-    status: "CLAIMED",
-    claimedAt: "1:45 PM",
-    scannedBy: "Tanvir",
-  },
-  {
-    id: "dx-2024-00130",
-    name: "Sarah Jenkins",
-    university: "MIT",
-    category: "AI Summit",
-    status: "PENDING",
-  },
-  {
-    id: "dx-2024-00131",
-    name: "Tanvir Hossein",
-    university: "BUET",
-    category: "Engineering Expo",
-    status: "CLAIMED",
-    claimedAt: "12:30 PM",
-    scannedBy: "System",
-  },
-  {
-    id: "dx-2024-00132",
-    name: "Ayesha Rahman",
-    university: "Ahsanullah University",
-    category: "Datathon",
-    status: "PENDING",
-  },
-  {
-    id: "dx-2024-00133",
-    name: "John Doe",
-    university: "University of Dhaka",
-    category: "Hackathon",
-    status: "CLAIMED",
-    claimedAt: "11:15 AM",
-    scannedBy: "Rakib",
-  },
-];

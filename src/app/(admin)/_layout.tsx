@@ -1,8 +1,8 @@
 // app/(admin)/_layout.tsx
 import { useTheme } from "@/hooks/use-theme";
-import { Feather } from "@expo/vector-icons";
+import { Feather, Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
-import { Platform } from "react-native";
+import { Platform, StyleSheet, View } from "react-native";
 
 export default function AdminLayout() {
   const theme = useTheme();
@@ -12,36 +12,36 @@ export default function AdminLayout() {
       screenOptions={{
         headerStyle: { backgroundColor: theme.surface },
         headerTintColor: theme.textMain,
-        headerShadowVisible: false, // Keeps the top header flat and modern
+        headerShadowVisible: false,
         tabBarStyle: {
           backgroundColor: theme.surface,
           borderTopColor: theme.border,
-          height: Platform.OS === "ios" ? 88 : 68, // Adjusts height safely for both platforms
-          paddingBottom: Platform.OS === "ios" ? 28 : 12,
+          height: Platform.OS === "ios" ? 90 : 70,
+          paddingBottom: Platform.OS === "ios" ? 28 : 10,
           paddingTop: 8,
+          position: "relative",
         },
         tabBarActiveTintColor: theme.primary,
         tabBarInactiveTintColor: theme.textMuted,
         tabBarLabelStyle: {
           fontFamily: "System",
-          fontWeight: "500",
-          fontSize: 12,
+          fontWeight: "600",
+          fontSize: 11,
+          marginTop: 4,
         },
       }}
     >
-      {/* Tab 1: Dashboard */}
       <Tabs.Screen
         name="dashboard"
         options={{
-          title: "Overview",
-          tabBarLabel: "Dashboard",
+          title: "Command Center",
+          tabBarLabel: "Home",
           tabBarIcon: ({ color, size }) => (
-            <Feather name="pie-chart" size={size} color={color} />
+            <Feather name="grid" size={size} color={color} />
           ),
         }}
       />
 
-      {/* Tab 2: Attendee Directory */}
       <Tabs.Screen
         name="directory"
         options={{
@@ -53,7 +53,32 @@ export default function AdminLayout() {
         }}
       />
 
-      {/* Tab 3: CSV Upload */}
+      {/* FLOATING SCANNER BUTTON */}
+      <Tabs.Screen
+        name="scanner"
+        options={{
+          title: "Scan QR Ticket",
+          tabBarLabel: "SCAN",
+          tabBarLabelStyle: {
+            color: theme.primary,
+            fontWeight: "800",
+            fontSize: 11,
+            marginTop: 4,
+          },
+          tabBarIcon: ({ focused }) => (
+            <View
+              style={[
+                styles.floatingButton,
+                { backgroundColor: theme.primary },
+                focused && styles.floatingButtonActive,
+              ]}
+            >
+              <Ionicons name="qr-code-outline" size={32} color="#FFF" />
+            </View>
+          ),
+        }}
+      />
+
       <Tabs.Screen
         name="upload"
         options={{
@@ -64,6 +89,38 @@ export default function AdminLayout() {
           ),
         }}
       />
+
+      <Tabs.Screen
+        name="settings"
+        options={{
+          title: "Settings",
+          tabBarLabel: "Settings",
+          tabBarIcon: ({ color, size }) => (
+            <Feather name="settings" size={size} color={color} />
+          ),
+        }}
+      />
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  floatingButton: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    justifyContent: "center",
+    alignItems: "center",
+    top: -20,
+    shadowColor: "#4F46E5",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 8,
+    borderWidth: 4,
+    borderColor: "#FFF",
+  },
+  floatingButtonActive: {
+    transform: [{ scale: 0.95 }],
+  },
+});
