@@ -1,7 +1,7 @@
 import FloatingScannerIcon from "@/components/FloatingScannerIcon";
 import SharedTabs from "@/components/SharedTabs";
 import { useTheme } from "@/hooks/use-theme";
-import { Feather } from "@expo/vector-icons";
+import { Feather, MaterialIcons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
 import React from "react";
 
@@ -13,10 +13,10 @@ export default function VolunteerLayout() {
       <Tabs.Screen
         name="inventory"
         options={{
-          title: "My Dashboard",
-          tabBarLabel: "Home",
+          headerShown: false,
+          tabBarLabel: "Inventory",
           tabBarIcon: ({ color, size }) => (
-            <Feather name="home" size={size} color={color} />
+            <MaterialIcons name="inventory" size={24} color="black" />
           ),
         }}
       />
@@ -24,7 +24,7 @@ export default function VolunteerLayout() {
       <Tabs.Screen
         name="scanner"
         options={{
-          title: "Scan Ticket",
+          title: "Scan QR Ticket",
           tabBarLabel: "SCAN",
           tabBarLabelStyle: {
             color: theme.primary,
@@ -41,7 +41,7 @@ export default function VolunteerLayout() {
       <Tabs.Screen
         name="logs"
         options={{
-          title: "My Recent Scans",
+          headerShown: false,
           tabBarLabel: "Logs",
           tabBarIcon: ({ color, size }) => (
             <Feather name="clock" size={size} color={color} />

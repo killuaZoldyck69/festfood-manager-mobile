@@ -9,16 +9,20 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
+  Platform,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 interface InventoryStats {
+  participants: number;
   available: number;
   served: number;
   duplicates: number;
@@ -26,26 +30,27 @@ interface InventoryStats {
 }
 
 const MOCK_STATS: InventoryStats = {
+  participants: 0,
   available: 0,
   served: 0,
   duplicates: 0,
   invalid: 0,
 };
 
-// 🔴 We define the props to accept the user's role
 interface InventoryScreenProps {
   role: "ADMIN" | "VOLUNTEER";
 }
 
 export default function InventoryScreen({ role }: InventoryScreenProps) {
   const theme = useTheme();
-  const { signOut } = useAuth();
+  const { user, signOut } = useAuth();
+
+  const { width: screenWidth } = useWindowDimensions();
 
   const [stats, setStats] = useState<InventoryStats>(MOCK_STATS);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Admin-only states
   const [isUpdating, setIsUpdating] = useState(false);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [inventoryInput, setInventoryInput] = useState("0");
@@ -56,6 +61,10 @@ export default function InventoryScreen({ role }: InventoryScreenProps) {
       if (response.ok) {
         const data = await response.json();
         setStats({
+          participants:
+            data?.participants ??
+            data?.totalParticipants ??
+            MOCK_STATS.participants,
           available:
             data?.available ?? data?.totalAvailable ?? MOCK_STATS.available,
           served: data?.served ?? data?.totalServed ?? MOCK_STATS.served,
@@ -83,7 +92,6 @@ export default function InventoryScreen({ role }: InventoryScreenProps) {
     fetchInventory();
   };
 
-  // Admin-only functions
   const openModal = () => {
     setInventoryInput((stats?.available ?? 0).toString());
     setIsModalVisible(true);
@@ -112,7 +120,6 @@ export default function InventoryScreen({ role }: InventoryScreenProps) {
 
       if (!response.ok) throw new Error("Failed to update inventory.");
     } catch (error) {
-      console.error("PUT Error:", error);
       Alert.alert(
         "Update Failed",
         "Could not reach the server. Reverting value.",
@@ -129,32 +136,49 @@ export default function InventoryScreen({ role }: InventoryScreenProps) {
       ? 0
       : Math.round(((stats?.served ?? 0) / totalActioned) * 100);
 
+  // Responsive calculations
+  const ringSize = Math.min(screenWidth * 0.55, 260);
+  const ringBorderWidth = ringSize * 0.07;
+
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
+    <SafeAreaView
+      style={[styles.safeArea, { backgroundColor: theme.background }]}
+    >
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <Feather
-            name="grid"
-            size={24}
-            color={theme.primary}
-            style={{ marginRight: 12 }}
-          />
-          <View>
-            <Text style={[styles.headerTitle, { color: theme.primary }]}>
-              Event Command
-            </Text>
-            <Text style={[styles.headerTitle, { color: theme.primary }]}>
-              Center
-            </Text>
-          </View>
+          <Text style={[styles.headerSubtitle, { color: theme.textMuted }]}>
+            {new Date().toLocaleDateString(undefined, {
+              weekday: "long",
+              month: "short",
+              day: "numeric",
+            })}
+          </Text>
+          <Text style={[styles.headerTitle, { color: theme.textMain }]}>
+            Overview
+          </Text>
         </View>
 
         <View style={styles.headerRight}>
-          <View style={[styles.roleBadge, { backgroundColor: theme.primary }]}>
-            <Text style={styles.roleBadgeText}>{role}</Text>
+          {/* 🔴 Unified Name + Role Pill */}
+          <View
+            style={[styles.userPill, { backgroundColor: `${theme.primary}15` }]}
+          >
+            <Text
+              style={[styles.userName, { color: theme.primary }]}
+              numberOfLines={1}
+            >
+              {user?.name || "Md. Nahid"}
+            </Text>
+            <View
+              style={[styles.roleBadge, { backgroundColor: theme.primary }]}
+            >
+              <Text style={styles.roleBadgeText}>{role}</Text>
+            </View>
           </View>
+
+          {/* 🔴 Red Logout Icon */}
           <TouchableOpacity onPress={signOut} style={styles.logoutBtn}>
-            <Feather name="log-out" size={24} color={theme.textMain} />
+            <Feather name="log-out" size={22} color={theme.error} />
           </TouchableOpacity>
         </View>
       </View>
@@ -178,18 +202,37 @@ export default function InventoryScreen({ role }: InventoryScreenProps) {
           />
         ) : (
           <>
+            {/* Responsive Hero Progress Ring */}
             <View style={[styles.heroCard, { backgroundColor: theme.surface }]}>
               <View
                 style={[
                   styles.progressRingWrapper,
-                  { borderColor: `${theme.primary}20` },
+                  {
+                    width: ringSize,
+                    height: ringSize,
+                    borderRadius: ringSize / 2,
+                    borderWidth: ringBorderWidth * 0.7,
+                    borderColor: `${theme.primary}20`,
+                  },
                 ]}
               >
                 <View
-                  style={[styles.progressRing, { borderColor: theme.primary }]}
+                  style={[
+                    styles.progressRing,
+                    {
+                      width: "100%",
+                      height: "100%",
+                      borderRadius: ringSize / 2,
+                      borderWidth: ringBorderWidth,
+                      borderColor: theme.primary,
+                    },
+                  ]}
                 >
                   <Text
-                    style={[styles.progressValue, { color: theme.textMain }]}
+                    style={[
+                      styles.progressValue,
+                      { color: theme.textMain, fontSize: ringSize * 0.22 },
+                    ]}
                   >
                     {progressPercentage}%
                   </Text>
@@ -199,6 +242,30 @@ export default function InventoryScreen({ role }: InventoryScreenProps) {
                     Food Claimed
                   </Text>
                 </View>
+              </View>
+            </View>
+
+            {/* 🔴 New Full-Width Participant Card */}
+            <View
+              style={[styles.fullWidthCard, { backgroundColor: theme.surface }]}
+            >
+              <View>
+                <Text style={[styles.gridTitle, { color: theme.textMuted }]}>
+                  Total Participants
+                </Text>
+                <Text
+                  style={[styles.fullWidthValue, { color: theme.textMain }]}
+                >
+                  {stats?.participants ?? 0}
+                </Text>
+              </View>
+              <View
+                style={[
+                  styles.iconWrapper,
+                  { backgroundColor: `${theme.primary}10` },
+                ]}
+              >
+                <Feather name="users" size={28} color={theme.primary} />
               </View>
             </View>
 
@@ -245,19 +312,16 @@ export default function InventoryScreen({ role }: InventoryScreenProps) {
               </View>
             </View>
 
-            {/* 🔴 Conditional Rendering: Only show to ADMIN */}
             {role === "ADMIN" && (
               <TouchableOpacity
-                style={[styles.adjustBtn, { borderColor: theme.primary }]}
+                style={[
+                  styles.adjustBtn,
+                  { borderColor: theme.border, backgroundColor: theme.surface },
+                ]}
                 activeOpacity={0.7}
                 onPress={openModal}
               >
-                <Feather
-                  name="code"
-                  size={20}
-                  color={theme.primary}
-                  style={{ transform: [{ rotate: "90deg" }] }}
-                />
+                <Feather name="sliders" size={20} color={theme.primary} />
                 <Text style={[styles.adjustBtnText, { color: theme.primary }]}>
                   Adjust Total Inventory
                 </Text>
@@ -269,10 +333,10 @@ export default function InventoryScreen({ role }: InventoryScreenProps) {
         )}
       </ScrollView>
 
-      {/* 🔴 Conditional Rendering: Only mount Modal for ADMIN */}
+      {/* Admin Adjustment Modal */}
       {role === "ADMIN" && (
         <Modal
-          animationType="slide"
+          animationType="fade"
           transparent={true}
           visible={isModalVisible}
           onRequestClose={() => setIsModalVisible(false)}
@@ -315,7 +379,7 @@ export default function InventoryScreen({ role }: InventoryScreenProps) {
               </View>
 
               <Text style={[styles.inputLabel, { color: theme.textMain }]}>
-                Total Inventory
+                Total Inventory Target
               </Text>
               <View style={styles.inputRow}>
                 <TouchableOpacity
@@ -380,39 +444,67 @@ export default function InventoryScreen({ role }: InventoryScreenProps) {
           </View>
         </Modal>
       )}
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingTop: 48 },
+  safeArea: { flex: 1, paddingTop: Platform.OS === "android" ? 40 : 16 },
+  container: { flex: 1 },
   scrollContent: { paddingHorizontal: SIZES.padding },
+
+  // Headers
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "flex-start",
+    alignItems: "center",
     paddingHorizontal: SIZES.padding,
     marginBottom: 24,
   },
-  headerLeft: { flexDirection: "row", alignItems: "center" },
-  headerTitle: { ...FONTS.header, fontSize: 24, lineHeight: 28 },
+  headerLeft: { flex: 1 },
+  headerSubtitle: {
+    ...FONTS.body,
+    fontSize: 12,
+    fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: 1,
+    marginBottom: 4,
+  },
+  headerTitle: { ...FONTS.header, fontSize: 24 },
+
   headerRight: { flexDirection: "row", alignItems: "center" },
+  userPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 20,
+    paddingLeft: 12,
+    paddingRight: 4,
+    paddingVertical: 4,
+    marginRight: 12,
+    maxWidth: 160,
+  },
+  userName: {
+    ...FONTS.body,
+    fontSize: 13,
+    fontWeight: "700",
+    marginRight: 8,
+    flexShrink: 1,
+  },
   roleBadge: {
-    // 🔴 Renamed
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 16,
-    marginRight: 12,
   },
   roleBadgeText: {
-    // 🔴 Renamed
     color: "#FFF",
     ...FONTS.body,
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "800",
-    letterSpacing: 1,
+    letterSpacing: 0.5,
   },
   logoutBtn: { padding: 4 },
+
+  // Hero Card
   heroCard: {
     padding: 32,
     borderRadius: SIZES.radius,
@@ -425,18 +517,10 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   progressRingWrapper: {
-    width: 220,
-    height: 220,
-    borderRadius: 110,
-    borderWidth: 8,
     justifyContent: "center",
     alignItems: "center",
   },
   progressRing: {
-    width: "100%",
-    height: "100%",
-    borderRadius: 110,
-    borderWidth: 12,
     justifyContent: "center",
     alignItems: "center",
     borderTopColor: "transparent",
@@ -445,9 +529,8 @@ const styles = StyleSheet.create({
   },
   progressValue: {
     ...FONTS.header,
-    fontSize: 48,
     transform: [{ rotate: "45deg" }],
-    marginTop: 20,
+    marginTop: 12,
   },
   progressLabel: {
     ...FONTS.body,
@@ -455,6 +538,31 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     transform: [{ rotate: "45deg" }],
   },
+
+  // Full Width Card
+  fullWidthCard: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 24,
+    borderRadius: SIZES.radius,
+    marginBottom: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  fullWidthValue: { ...FONTS.header, fontSize: 36 },
+  iconWrapper: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  // Grid Cards
   grid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -479,39 +587,39 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   gridValue: { ...FONTS.header, fontSize: 28 },
+
+  // Admin Adjust Button
   adjustBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     height: 56,
     borderRadius: SIZES.radius,
-    borderWidth: 2,
+    borderWidth: 1,
     marginBottom: 24,
   },
   adjustBtnText: {
     ...FONTS.body,
     fontWeight: "700",
-    fontSize: 16,
-    marginLeft: 8,
+    fontSize: 15,
+    marginLeft: 10,
   },
+
+  // Modal
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "flex-end",
+    justifyContent: "center",
+    padding: SIZES.padding,
   },
-  modalContent: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 24,
-    paddingBottom: 40,
-  },
+  modalContent: { borderRadius: 24, padding: 24 },
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 24,
   },
-  modalTitle: { ...FONTS.header, fontSize: 24 },
+  modalTitle: { ...FONTS.header, fontSize: 22 },
   readOnlyRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -520,8 +628,8 @@ const styles = StyleSheet.create({
     borderRadius: SIZES.radius,
     marginBottom: 24,
   },
-  readOnlyLabel: { ...FONTS.body, fontSize: 14 },
-  readOnlyValue: { ...FONTS.header, fontSize: 18 },
+  readOnlyLabel: { ...FONTS.body, fontSize: 14, fontWeight: "600" },
+  readOnlyValue: { ...FONTS.header, fontSize: 20 },
   inputLabel: { ...FONTS.body, fontWeight: "600", marginBottom: 12 },
   inputRow: {
     flexDirection: "row",
@@ -530,9 +638,9 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   adjustCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     justifyContent: "center",
     alignItems: "center",
     shadowColor: "#000",
@@ -541,11 +649,11 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
-  adjustCircleText: { ...FONTS.body, fontWeight: "700", fontSize: 16 },
+  adjustCircleText: { ...FONTS.body, fontWeight: "700", fontSize: 18 },
   numberInput: {
     flex: 1,
     marginHorizontal: 16,
-    height: 56,
+    height: 50,
     borderWidth: 1,
     borderRadius: SIZES.radius,
     ...FONTS.header,
@@ -567,5 +675,6 @@ const styles = StyleSheet.create({
     ...FONTS.body,
     fontWeight: "700",
     fontSize: 16,
+    letterSpacing: 0.5,
   },
 });

@@ -1,7 +1,7 @@
 import FloatingScannerIcon from "@/components/FloatingScannerIcon";
 import SharedTabs from "@/components/SharedTabs";
 import { useTheme } from "@/hooks/use-theme";
-import { Feather } from "@expo/vector-icons";
+import { Feather, MaterialIcons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
 import React from "react";
 
@@ -13,10 +13,10 @@ export default function AdminLayout() {
       <Tabs.Screen
         name="inventory"
         options={{
-          title: "My Dashboard",
-          tabBarLabel: "Home",
+          headerShown: false,
+          tabBarLabel: "Inventory",
           tabBarIcon: ({ color, size }) => (
-            <Feather name="home" size={size} color={color} />
+            <MaterialIcons name="inventory" size={24} color="black" />
           ),
         }}
       />
@@ -24,7 +24,7 @@ export default function AdminLayout() {
       <Tabs.Screen
         name="directory"
         options={{
-          title: "Attendee Directory",
+          headerShown: false,
           tabBarLabel: "Directory",
           tabBarIcon: ({ color, size }) => (
             <Feather name="users" size={size} color={color} />
@@ -52,7 +52,7 @@ export default function AdminLayout() {
       <Tabs.Screen
         name="upload"
         options={{
-          title: "Upload & Export",
+          headerShown: false,
           tabBarLabel: "Upload",
           tabBarIcon: ({ color, size }) => (
             <Feather name="upload-cloud" size={size} color={color} />
@@ -63,7 +63,7 @@ export default function AdminLayout() {
       <Tabs.Screen
         name="logs"
         options={{
-          title: "System Audit Logs",
+          headerShown: false,
           tabBarLabel: "Logs",
           tabBarIcon: ({ color, size }) => (
             <Feather name="file-text" size={size} color={color} />
