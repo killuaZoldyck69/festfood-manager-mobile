@@ -16,24 +16,22 @@ import {
   View,
 } from "react-native";
 
-// 🔴 Bypass strict TypeScript errors for web compilation
-const NativeFS: any = FileSystem;
+const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
+const API_URL = `${BASE_URL}/api/admin/upload`;
 
-const API_URL = "http://192.168.0.102:5000/api/admin/upload";
+type UploadStatus = "idle" | "uploading" | "success" | "error";
 
 export default function AdminUploadScreen() {
   const theme = useTheme();
 
-  const [status, setStatus] = useState<
-    "idle" | "uploading" | "success" | "error"
-  >("idle");
+  const [status, setStatus] = useState<UploadStatus>("idle");
   const [progress, setProgress] = useState(0);
   const [pdfUri, setPdfUri] = useState<string | null>(null);
 
   const pickDocument = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: "*/*", // Allows all files so OS doesn't gray out CSVs
+        type: "*/*",
         copyToCacheDirectory: true,
       });
 
@@ -45,7 +43,7 @@ export default function AdminUploadScreen() {
         return;
       }
 
-      uploadFile(file);
+      await uploadFile(file);
     } catch (err) {
       console.error("Document Picker Error:", err);
     }
@@ -54,6 +52,8 @@ export default function AdminUploadScreen() {
   const uploadFile = async (file: DocumentPicker.DocumentPickerAsset) => {
     setStatus("uploading");
     setProgress(10);
+
+    let progressInterval: ReturnType<typeof setInterval> | undefined;
 
     try {
       const formData = new FormData();
@@ -71,39 +71,37 @@ export default function AdminUploadScreen() {
         } as any);
       }
 
-      const requestHeaders: any = { Accept: "application/json" }; // 🔴 Expect JSON now
+      const headers: Record<string, string> = { Accept: "application/json" };
 
       if (Platform.OS !== "web") {
-        requestHeaders["Origin"] = "http://192.168.0.102:5000";
+        headers["Origin"] = BASE_URL || "";
         const token = await SecureStore.getItemAsync(
           "better-auth.session_token",
         );
-        if (token) requestHeaders["Authorization"] = `Bearer ${token}`;
+        if (token) headers["Authorization"] = `Bearer ${token}`;
       }
 
-      const progressInterval = setInterval(() => {
-        setProgress((prev) => (prev >= 85 ? 85 : prev + 15));
+      progressInterval = setInterval(() => {
+        setProgress((prev) => Math.min(prev + 15, 85));
       }, 1000);
 
       const response = await fetch(API_URL, {
         method: "POST",
         body: formData,
         credentials: "include",
-        headers: requestHeaders,
+        headers,
       });
 
-      clearInterval(progressInterval);
       const data = await response.json();
 
-      // 💥 NEW: SPECIFIC GRACEFUL ERROR HANDLING FOR DUPLICATES
       if (response.status === 409) {
-        setStatus("idle"); // Reset the UI so they can upload a different file
+        setStatus("idle");
         Alert.alert(
           "Upload Skipped 🛡️",
           data.message || "Everyone in this file is already registered!",
-          [{ text: "Got it", style: "default" }],
+          [{ text: "Got it" }],
         );
-        return; // Stop execution here so it doesn't trigger a generic error
+        return;
       }
 
       if (!response.ok || !data.pdfBase64) {
@@ -115,7 +113,6 @@ export default function AdminUploadScreen() {
       setProgress(95);
       const filename = `Fest_Tickets_${Date.now()}.pdf`;
 
-      // 🔴 Safely write the Base64 string directly to the device
       if (Platform.OS === "web") {
         const linkSource = `data:application/pdf;base64,${data.pdfBase64}`;
         const downloadLink = document.createElement("a");
@@ -125,13 +122,10 @@ export default function AdminUploadScreen() {
         downloadLink.click();
         document.body.removeChild(downloadLink);
       } else {
-        const fileUri = `${NativeFS.documentDirectory}${filename}`;
-
-        // 🔴 THE FIX: Use the raw "base64" string instead of the Expo Enum
-        await NativeFS.writeAsStringAsync(fileUri, data.pdfBase64, {
+        const fileUri = `${FileSystem.documentDirectory}${filename}`;
+        await FileSystem.writeAsStringAsync(fileUri, data.pdfBase64, {
           encoding: "base64",
         });
-
         setPdfUri(fileUri);
       }
 
@@ -140,6 +134,8 @@ export default function AdminUploadScreen() {
     } catch (error: any) {
       setStatus("error");
       Alert.alert("Upload Failed", error.message);
+    } finally {
+      if (progressInterval) clearInterval(progressInterval);
     }
   };
 
@@ -160,7 +156,7 @@ export default function AdminUploadScreen() {
         await Sharing.shareAsync(pdfUri, {
           mimeType: "application/pdf",
           dialogTitle: "Print or Share Fest Tickets",
-          UTI: "com.adobe.pdf", // 🔴 CRITICAL FOR iOS: Tells Apple it's a strict PDF
+          UTI: "com.adobe.pdf",
         });
       } else {
         Alert.alert(
@@ -173,12 +169,10 @@ export default function AdminUploadScreen() {
     }
   };
 
-  // ... [KEEP YOUR EXISTING JSX return() AND StyleSheet EXACTLY THE SAME]
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: theme.background }]}
     >
-      {/* Header Info */}
       <View style={styles.header}>
         <Text style={[styles.title, { color: theme.textMain }]}>
           Upload & Export
@@ -189,7 +183,6 @@ export default function AdminUploadScreen() {
         </Text>
       </View>
 
-      {/* System Health Card */}
       <View style={[styles.card, { backgroundColor: theme.surface }]}>
         <View style={styles.healthRow}>
           <Text style={[styles.cardEyebrow, { color: theme.textMuted }]}>
@@ -207,7 +200,6 @@ export default function AdminUploadScreen() {
         </Text>
       </View>
 
-      {/* Progress State */}
       {status === "uploading" && (
         <View
           style={[
@@ -243,7 +235,6 @@ export default function AdminUploadScreen() {
         </View>
       )}
 
-      {/* Guide Card */}
       <View
         style={[
           styles.guideCard,
@@ -259,6 +250,7 @@ export default function AdminUploadScreen() {
         <Text style={[styles.guideText, { color: theme.textMain }]}>
           Ensure your CSV has these exact column headers:{" "}
           <Text style={styles.codeText}>name</Text>,{" "}
+          <Text style={styles.codeText}>email</Text>,{" "}
           <Text style={styles.codeText}>university</Text>,{" "}
           <Text style={styles.codeText}>role</Text>,{" "}
           <Text style={styles.codeText}>category</Text>.
@@ -271,7 +263,6 @@ export default function AdminUploadScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Idle / Dropzone State */}
       {status !== "success" && status !== "uploading" && (
         <TouchableOpacity
           style={[
@@ -302,7 +293,6 @@ export default function AdminUploadScreen() {
         </TouchableOpacity>
       )}
 
-      {/* Success State */}
       {status === "success" && (
         <View style={styles.successContainer}>
           <View
