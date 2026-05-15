@@ -1,36 +1,15 @@
+import FloatingScannerIcon from "@/components/FloatingScannerIcon";
+import SharedTabs from "@/components/SharedTabs";
 import { useTheme } from "@/hooks/use-theme";
-import { Feather, Ionicons } from "@expo/vector-icons";
+import { Feather } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
-import { Platform, StyleSheet, View } from "react-native";
+import React from "react";
 
 export default function VolunteerLayout() {
   const theme = useTheme();
 
   return (
-    <Tabs
-      screenOptions={{
-        headerStyle: { backgroundColor: theme.surface },
-        headerTintColor: theme.textMain,
-        headerShadowVisible: false,
-        tabBarStyle: {
-          backgroundColor: theme.surface,
-          borderTopColor: theme.border,
-          height: Platform.OS === "ios" ? 90 : 70,
-          paddingBottom: Platform.OS === "ios" ? 28 : 10,
-          paddingTop: 8,
-          position: "relative",
-        },
-        tabBarActiveTintColor: theme.primary,
-        tabBarInactiveTintColor: theme.textMuted,
-        tabBarLabelStyle: {
-          fontFamily: "System",
-          fontWeight: "600",
-          fontSize: 11,
-          marginTop: 4,
-        },
-      }}
-    >
-      {/* Change this from "dashboard" to "inventory" */}
+    <SharedTabs>
       <Tabs.Screen
         name="inventory"
         options={{
@@ -42,7 +21,6 @@ export default function VolunteerLayout() {
         }}
       />
 
-      {/* Tab 2: FLOATING SCANNER BUTTON (Center) */}
       <Tabs.Screen
         name="scanner"
         options={{
@@ -55,20 +33,11 @@ export default function VolunteerLayout() {
             marginTop: 4,
           },
           tabBarIcon: ({ focused }) => (
-            <View
-              style={[
-                styles.floatingButton,
-                { backgroundColor: theme.primary },
-                focused && styles.floatingButtonActive,
-              ]}
-            >
-              <Ionicons name="qr-code-outline" size={32} color="#FFF" />
-            </View>
+            <FloatingScannerIcon focused={focused} />
           ),
         }}
       />
 
-      {/* Tab 3: Volunteer Scan Logs */}
       <Tabs.Screen
         name="logs"
         options={{
@@ -79,27 +48,6 @@ export default function VolunteerLayout() {
           ),
         }}
       />
-    </Tabs>
+    </SharedTabs>
   );
 }
-
-const styles = StyleSheet.create({
-  floatingButton: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    justifyContent: "center",
-    alignItems: "center",
-    top: -20, // Pushes it up above the tab bar
-    shadowColor: "#4F46E5",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 8,
-    borderWidth: 4,
-    borderColor: "#FFF", // Creates the cutout effect
-  },
-  floatingButtonActive: {
-    transform: [{ scale: 0.95 }], // Slight press effect
-  },
-});
