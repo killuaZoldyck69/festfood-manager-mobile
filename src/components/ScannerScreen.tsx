@@ -1,4 +1,3 @@
-// components/ScannerScreen.tsx
 import { FONTS } from "@/constants/theme";
 import { useTheme } from "@/hooks/use-theme";
 import { apiClient } from "@/utils/apiClient";
@@ -29,10 +28,23 @@ interface ScanData {
   claimedAt?: string;
 }
 
-// 🔴 Added the role prop
 interface ScannerScreenProps {
   role: "ADMIN" | "VOLUNTEER";
 }
+
+// 🔴 NEW: Smart Time Formatter
+const formatTime = (dateString: string | undefined) => {
+  if (!dateString) return "Unknown Time";
+
+  // If the backend already formatted it beautifully (e.g. "12:05 PM"), leave it alone
+  if (dateString.match(/AM|PM/i)) return dateString;
+
+  // Otherwise, convert the ugly ISO string into a beautiful time string
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return dateString; // Fallback just in case
+
+  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+};
 
 export default function ScannerScreen({ role }: ScannerScreenProps) {
   const theme = useTheme();
@@ -78,7 +90,6 @@ export default function ScannerScreen({ role }: ScannerScreenProps) {
     type: string;
     data: string;
   }) => {
-    // Lock the scanner so we don't accidentally send 5 requests for the same code
     if (status !== "IDLE") return;
     setStatus("PROCESSING");
 
@@ -97,10 +108,22 @@ export default function ScannerScreen({ role }: ScannerScreenProps) {
         });
         setStatus("SUCCESS");
       } else {
-        if (responseData.error === "ALREADY_CLAIMED") {
+        // Smart Error Matching
+        const errorMessage = (
+          responseData.error ||
+          responseData.message ||
+          ""
+        ).toUpperCase();
+
+        if (
+          errorMessage.includes("ALREADY") ||
+          errorMessage.includes("CLAIMED") ||
+          errorMessage.includes("DUPLICATE")
+        ) {
           setScanData({
             name: responseData.attendee?.name || "Unknown Attendee",
-            claimedAt: responseData.attendee?.claimedAt || "Unknown Time",
+            claimedAt:
+              responseData.attendee?.claimedAt || new Date().toISOString(),
           });
           setStatus("ALREADY_CLAIMED");
         } else {
@@ -178,7 +201,6 @@ export default function ScannerScreen({ role }: ScannerScreenProps) {
             <Text style={styles.instructionText}>
               Align the QR code within the frame to scan.
             </Text>
-            {/* Optional subtle indicator of who is scanning */}
             <Text
               style={[
                 styles.instructionText,
@@ -252,10 +274,11 @@ export default function ScannerScreen({ role }: ScannerScreenProps) {
               </View>
               <View style={styles.cardFooter}>
                 <Feather name="clock" size={16} color="#6B7280" />
+                {/* 🔴 THE FIX: Format the time string beautifully here */}
                 <Text
                   style={[styles.outcomeCardSubtitle, { fontWeight: "700" }]}
                 >
-                  Claimed at: {scanData.claimedAt}
+                  Claimed at: {formatTime(scanData.claimedAt)}
                 </Text>
               </View>
             </View>
@@ -318,6 +341,9 @@ export default function ScannerScreen({ role }: ScannerScreenProps) {
   );
 }
 
+// ==========================================
+// STYLES
+// ==========================================
 const styles = StyleSheet.create({
   container: { flex: 1 },
   centerContainer: {

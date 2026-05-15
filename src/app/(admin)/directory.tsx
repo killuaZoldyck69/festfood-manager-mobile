@@ -269,7 +269,7 @@ export default function AdminDirectoryScreen() {
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.surface }]}>
       <View style={styles.header}>
-        <Text style={[styles.headerTitle, { color: theme.textMain }]}>
+        <Text style={[styles.headerTitle, { color: theme.primary }]}>
           Attendee Directory
         </Text>
         {meta && (

@@ -174,7 +174,7 @@ export default function AdminUploadScreen() {
       style={[styles.container, { backgroundColor: theme.background }]}
     >
       <View style={styles.header}>
-        <Text style={[styles.title, { color: theme.textMain }]}>
+        <Text style={[styles.title, { color: theme.primary }]}>
           Upload & Export
         </Text>
         <Text style={[styles.subtitle, { color: theme.textMuted }]}>
