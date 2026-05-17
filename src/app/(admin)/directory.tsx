@@ -33,7 +33,6 @@ interface Attendee {
   scannerRole?: string | null;
 }
 
-// 🔴 UPDATED: Added currentFilter to Metadata
 interface MetaData {
   totalAttendees: number;
   currentPage: number;
@@ -81,9 +80,11 @@ export default function AdminDirectoryScreen() {
   const [claimConfirmAttendee, setClaimConfirmAttendee] =
     useState<Attendee | null>(null);
 
-  // 🔴 UPDATED: The effect now triggers automatically when the tab OR search query changes
   useFocusEffect(
     useCallback(() => {
+      // 🔴 FIX: Instantly trigger loading spinner while we wait for the 500ms delay
+      setIsLoading(true);
+
       const delayDebounceFn = setTimeout(() => {
         fetchAttendees(1, searchQuery, activeTab);
       }, 500);
@@ -92,7 +93,6 @@ export default function AdminDirectoryScreen() {
     }, [searchQuery, activeTab]),
   );
 
-  // 🔴 UPDATED: Passes the activeTab to the backend URL
   const fetchAttendees = async (
     pageNumber: number,
     currentSearch: string,
@@ -102,7 +102,6 @@ export default function AdminDirectoryScreen() {
     try {
       let url = `/admin/attendees?search=${encodeURIComponent(currentSearch)}&page=${pageNumber}&limit=25`;
 
-      // Append the status filter if the user isn't on the "ALL" tab
       if (currentTab !== "ALL") {
         url += `&status=${currentTab}`;
       }
@@ -120,7 +119,6 @@ export default function AdminDirectoryScreen() {
         else if (data && Array.isArray(data.attendees))
           fetchedAttendees = data.attendees;
 
-        // Smart Fallback (in case backend ignores limits)
         if (
           fetchedAttendees.length > 10 &&
           (!fetchedMeta || fetchedMeta.totalPages === 1)
@@ -148,8 +146,8 @@ export default function AdminDirectoryScreen() {
     }
   };
 
-  // 🔴 NEW: Instantly clear the list when changing tabs to prevent seeing old data
   const handleTabChange = (tab: FilterTab) => {
+    setIsLoading(true);
     setActiveTab(tab);
     setAttendees([]);
     setMeta(null);
@@ -194,7 +192,6 @@ export default function AdminDirectoryScreen() {
     }
   };
 
-  // 🔴 REMOVED LOCAL FILTERING: Since the backend does it perfectly, we just render exactly what we get!
   const safeAttendees = Array.isArray(attendees) ? attendees : [];
 
   const renderAttendee = ({ item }: { item: Attendee }) => {
@@ -321,7 +318,7 @@ export default function AdminDirectoryScreen() {
                     shadowOffset: { width: 0, height: 1 },
                   },
                 ]}
-                onPress={() => handleTabChange(tab)} // 🔴 Using the new handler
+                onPress={() => handleTabChange(tab)}
               >
                 <Text
                   style={[
@@ -339,122 +336,113 @@ export default function AdminDirectoryScreen() {
           })}
         </View>
 
-        {isLoading && attendees.length === 0 ? (
-          <View style={styles.centerContent}>
-            <ActivityIndicator size="large" color={theme.primary} />
-          </View>
-        ) : (
-          <FlatList
-            data={safeAttendees} // 🔴 Passed the un-filtered array because the backend did the work!
-            keyExtractor={(item) => item.id}
-            renderItem={renderAttendee}
-            contentContainerStyle={styles.listContent}
-            showsVerticalScrollIndicator={false}
-            ListEmptyComponent={
-              <View style={styles.centerContent}>
+        {/* 🔴 FIX: Removed the outer `{isLoading}` wrapper and moved it inside the FlatList for a seamless transition */}
+        <FlatList
+          data={safeAttendees}
+          keyExtractor={(item) => item.id}
+          renderItem={renderAttendee}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <View style={styles.centerContent}>
+              {isLoading ? (
+                <ActivityIndicator
+                  size="large"
+                  color={theme.primary}
+                  style={{ marginTop: 60 }}
+                />
+              ) : (
                 <Text
                   style={{
                     color: theme.textMuted,
-                    marginTop: 40,
+                    marginTop: 60,
                     ...FONTS.body,
                   }}
                 >
                   No attendees found.
                 </Text>
-              </View>
-            }
-            ListFooterComponent={
-              safeAttendees.length > 0 && meta && meta.totalPages > 1 ? (
-                <View style={styles.paginationWrapper}>
-                  <TouchableOpacity
-                    style={[
-                      styles.pageBtn,
-                      meta.currentPage === 1 && styles.pageBtnDisabled,
-                      {
-                        backgroundColor: theme.surface,
-                        borderColor: theme.border,
-                      },
-                    ]}
-                    disabled={meta.currentPage === 1 || isLoading}
-                    onPress={() =>
-                      fetchAttendees(
-                        meta.currentPage - 1,
-                        searchQuery,
-                        activeTab,
-                      )
+              )}
+            </View>
+          }
+          ListFooterComponent={
+            safeAttendees.length > 0 && meta && meta.totalPages > 1 ? (
+              <View style={styles.paginationWrapper}>
+                <TouchableOpacity
+                  style={[
+                    styles.pageBtn,
+                    meta.currentPage === 1 && styles.pageBtnDisabled,
+                    {
+                      backgroundColor: theme.surface,
+                      borderColor: theme.border,
+                    },
+                  ]}
+                  disabled={meta.currentPage === 1 || isLoading}
+                  onPress={() =>
+                    fetchAttendees(meta.currentPage - 1, searchQuery, activeTab)
+                  }
+                >
+                  <Feather
+                    name="chevron-left"
+                    size={20}
+                    color={
+                      meta.currentPage === 1 ? theme.textMuted : theme.primary
                     }
-                  >
-                    <Feather
-                      name="chevron-left"
-                      size={20}
-                      color={
-                        meta.currentPage === 1 ? theme.textMuted : theme.primary
-                      }
-                    />
-                    <Text
-                      style={[
-                        styles.pageBtnText,
-                        {
-                          color:
-                            meta.currentPage === 1
-                              ? theme.textMuted
-                              : theme.primary,
-                          marginLeft: 4,
-                        },
-                      ]}
-                    >
-                      Prev
-                    </Text>
-                  </TouchableOpacity>
-
+                  />
                   <Text
-                    style={[styles.pageIndicator, { color: theme.textMain }]}
-                  >
-                    Page {meta.currentPage} of {meta.totalPages}
-                  </Text>
-
-                  <TouchableOpacity
                     style={[
-                      styles.pageBtn,
-                      !meta.hasMore && styles.pageBtnDisabled,
+                      styles.pageBtnText,
                       {
-                        backgroundColor: theme.surface,
-                        borderColor: theme.border,
-                      },
-                    ]}
-                    disabled={!meta.hasMore || isLoading}
-                    onPress={() =>
-                      fetchAttendees(
-                        meta.currentPage + 1,
-                        searchQuery,
-                        activeTab,
-                      )
-                    }
-                  >
-                    <Text
-                      style={[
-                        styles.pageBtnText,
-                        {
-                          color: !meta.hasMore
+                        color:
+                          meta.currentPage === 1
                             ? theme.textMuted
                             : theme.primary,
-                          marginRight: 4,
-                        },
-                      ]}
-                    >
-                      Next
-                    </Text>
-                    <Feather
-                      name="chevron-right"
-                      size={20}
-                      color={!meta.hasMore ? theme.textMuted : theme.primary}
-                    />
-                  </TouchableOpacity>
-                </View>
-              ) : null
-            }
-          />
-        )}
+                        marginLeft: 4,
+                      },
+                    ]}
+                  >
+                    Prev
+                  </Text>
+                </TouchableOpacity>
+
+                <Text style={[styles.pageIndicator, { color: theme.textMain }]}>
+                  Page {meta.currentPage} of {meta.totalPages}
+                </Text>
+
+                <TouchableOpacity
+                  style={[
+                    styles.pageBtn,
+                    !meta.hasMore && styles.pageBtnDisabled,
+                    {
+                      backgroundColor: theme.surface,
+                      borderColor: theme.border,
+                    },
+                  ]}
+                  disabled={!meta.hasMore || isLoading}
+                  onPress={() =>
+                    fetchAttendees(meta.currentPage + 1, searchQuery, activeTab)
+                  }
+                >
+                  <Text
+                    style={[
+                      styles.pageBtnText,
+                      {
+                        color: !meta.hasMore ? theme.textMuted : theme.primary,
+                        marginRight: 4,
+                      },
+                    ]}
+                  >
+                    Next
+                  </Text>
+                  <Feather
+                    name="chevron-right"
+                    size={20}
+                    color={!meta.hasMore ? theme.textMuted : theme.primary}
+                  />
+                </TouchableOpacity>
+              </View>
+            ) : null
+          }
+        />
       </View>
 
       {/* Confirmation Modal */}
