@@ -10,6 +10,7 @@ import {
   FlatList,
   Platform,
   SafeAreaView,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -23,14 +24,27 @@ interface ScanLog {
   scannedAt: string;
   volunteerName: string;
   attendeeName: string | null;
+  volunteerRole?: string | null;
+  attendeeUniversity?: string | null;
+  attendeeCategory?: string | null;
 }
 
+// 🔴 UPDATED: Added currentFilter to Metadata
 interface MetaData {
   totalLogs: number;
   currentPage: number;
   totalPages: number;
   hasMore: boolean;
+  currentFilter?: string;
 }
+
+// 🔴 NEW: Defined all 5 possible admin filter tabs
+type FilterTab =
+  | "ALL"
+  | "SUCCESS"
+  | "DUPLICATE"
+  | "INVALID"
+  | "MANUAL_OVERRIDE";
 
 const formatTime = (isoString: string) => {
   const date = new Date(isoString);
@@ -49,22 +63,31 @@ export default function AdminLogsScreen() {
   const [meta, setMeta] = useState<MetaData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Initial Fetch (Page 1) when the tab is focused
+  // 🔴 NEW: State for active filter tab
+  const [activeTab, setActiveTab] = useState<FilterTab>("ALL");
+
+  // 🔴 UPDATED: Watch for tab changes
   useFocusEffect(
     useCallback(() => {
-      fetchLogs(1);
-    }, []),
+      fetchLogs(1, activeTab);
+    }, [activeTab]),
   );
 
-  const fetchLogs = async (pageNumber: number) => {
+  // 🔴 UPDATED: Accept and append the status filter to the URL
+  const fetchLogs = async (
+    pageNumber: number,
+    currentTab: FilterTab = activeTab,
+  ) => {
     setIsLoading(true);
 
     try {
-      // 1. Request strictly 10 items from the backend
-      const response = await apiClient(
-        `/admin/logs?page=${pageNumber}&limit=10`,
-        { method: "GET" },
-      );
+      let url = `/admin/logs?page=${pageNumber}&limit=10`;
+
+      if (currentTab !== "ALL") {
+        url += `&status=${currentTab}`;
+      }
+
+      const response = await apiClient(url, { method: "GET" });
 
       if (response.ok) {
         const data = await response.json();
@@ -72,9 +95,11 @@ export default function AdminLogsScreen() {
         let finalLogs = data.logs;
         let finalMeta = data.meta;
 
-        // 🔴 SMART FALLBACK: If backend ignores limit=10 and sends all 15 logs,
-        // the frontend will manually slice the array so the UI works perfectly!
-        if (data.logs.length > 10 && data.meta.totalPages === 1) {
+        // Smart Fallback
+        if (
+          data.logs.length > 10 &&
+          (!data.meta || data.meta.totalPages === 1)
+        ) {
           const startIndex = (pageNumber - 1) * 10;
           const endIndex = startIndex + 10;
 
@@ -84,10 +109,10 @@ export default function AdminLogsScreen() {
             currentPage: pageNumber,
             totalPages: Math.ceil(data.logs.length / 10),
             hasMore: endIndex < data.logs.length,
+            currentFilter: currentTab,
           };
         }
 
-        // 2. Explicitly REPLACE the logs (don't append) to strictly show 10 at a time
         setLogs(finalLogs);
         setMeta(finalMeta);
       }
@@ -98,7 +123,13 @@ export default function AdminLogsScreen() {
     }
   };
 
-  // Ensure duplicate scans show Red Cross
+  // 🔴 NEW: Clear old data immediately when switching tabs
+  const handleTabChange = (tab: FilterTab) => {
+    setActiveTab(tab);
+    setLogs([]);
+    setMeta(null);
+  };
+
   const getStatusVisuals = (status: string) => {
     const normalizedStatus = status.toUpperCase();
 
@@ -106,24 +137,24 @@ export default function AdminLogsScreen() {
       normalizedStatus.includes("DUPLICATE") ||
       normalizedStatus.includes("ALREADY_CLAIMED")
     ) {
-      return { color: theme.error, icon: "x-circle", bg: `${theme.error}15` }; // Red Cross
+      return { color: theme.error, icon: "x-circle", bg: `${theme.error}15` };
     }
     if (normalizedStatus.includes("SUCCESS")) {
       return {
         color: theme.success,
         icon: "check-circle",
         bg: `${theme.success}15`,
-      }; // Green Check
+      };
     }
     if (normalizedStatus.includes("MANUAL_OVERRIDE")) {
-      return { color: theme.primary, icon: "edit-3", bg: `${theme.primary}15` }; // Purple Pen
+      return { color: theme.primary, icon: "edit-3", bg: `${theme.primary}15` };
     }
 
     return {
       color: "#F59E0B",
       icon: "alert-triangle",
       bg: "rgba(245,158,11,0.15)",
-    }; // Orange Alert
+    };
   };
 
   const renderLogItem = ({ item }: { item: ScanLog }) => {
@@ -148,11 +179,37 @@ export default function AdminLogsScreen() {
             <Text style={[styles.label, { color: theme.textMuted }]}>
               ATTENDEE
             </Text>
-            <Text style={[styles.value, { color: theme.textMain }]}>
+            <Text
+              style={[styles.attendeeName, { color: theme.textMain }]}
+              numberOfLines={1}
+            >
               {item.attendeeName || "Unknown / Invalid Token"}
             </Text>
+            <Text
+              style={[styles.attendeeUniversity, { color: theme.textMuted }]}
+              numberOfLines={1}
+            >
+              {item.attendeeUniversity || "Missing Info"}
+            </Text>
+
+            <View style={styles.metaRow}>
+              {item.attendeeCategory && (
+                <View
+                  style={[
+                    styles.categoryBadge,
+                    { backgroundColor: `${theme.primary}15` },
+                  ]}
+                >
+                  <Text
+                    style={[styles.categoryBadgeText, { color: theme.primary }]}
+                  >
+                    {item.attendeeCategory}
+                  </Text>
+                </View>
+              )}
+            </View>
             <Text style={[styles.tokenText, { color: theme.textMuted }]}>
-              Token: {item.scannedToken.substring(0, 8)}...
+              Token: {item.scannedToken.substring(0, 8).toUpperCase()}...
             </Text>
           </View>
 
@@ -162,9 +219,40 @@ export default function AdminLogsScreen() {
             <Text style={[styles.label, { color: theme.textMuted }]}>
               ACTION BY
             </Text>
-            <Text style={[styles.value, { color: theme.textMain }]}>
+            <Text
+              style={[styles.attendeeName, { color: theme.textMain }]}
+              numberOfLines={1}
+            >
               {item.volunteerName || "System"}
             </Text>
+
+            {item.volunteerRole && (
+              <View
+                style={[
+                  styles.roleBadge,
+                  {
+                    backgroundColor:
+                      item.volunteerRole === "ADMIN"
+                        ? `${theme.primary}15`
+                        : `${theme.success}15`,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.roleBadgeText,
+                    {
+                      color:
+                        item.volunteerRole === "ADMIN"
+                          ? theme.primary
+                          : theme.success,
+                    },
+                  ]}
+                >
+                  {item.volunteerRole}
+                </Text>
+              </View>
+            )}
           </View>
         </View>
       </View>
@@ -186,7 +274,57 @@ export default function AdminLogsScreen() {
         )}
       </View>
 
-      {isLoading ? (
+      {/* 🔴 NEW: Horizontal Scrollable Tab Row */}
+      <View style={styles.tabsWrapper}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabsScrollContent}
+        >
+          {(
+            [
+              "ALL",
+              "SUCCESS",
+              "DUPLICATE",
+              "INVALID",
+              "MANUAL_OVERRIDE",
+            ] as FilterTab[]
+          ).map((tab) => {
+            const isActive = activeTab === tab;
+            return (
+              <TouchableOpacity
+                key={tab}
+                style={[
+                  styles.tab,
+                  { backgroundColor: theme.surface },
+                  isActive && {
+                    backgroundColor: theme.background,
+                    shadowColor: "#000",
+                    elevation: 2,
+                    shadowOpacity: 0.1,
+                    shadowOffset: { width: 0, height: 1 },
+                  },
+                ]}
+                onPress={() => handleTabChange(tab)}
+              >
+                <Text
+                  style={[
+                    styles.tabText,
+                    {
+                      color: isActive ? theme.primary : theme.textMuted,
+                      fontWeight: isActive ? "700" : "500",
+                    },
+                  ]}
+                >
+                  {tab.replace("_", " ")}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </View>
+
+      {isLoading && logs.length === 0 ? (
         <View style={styles.centerContent}>
           <ActivityIndicator size="large" color={theme.primary} />
         </View>
@@ -206,13 +344,12 @@ export default function AdminLogsScreen() {
                 style={{ marginBottom: 16 }}
               />
               <Text style={[styles.emptyText, { color: theme.textMuted }]}>
-                No scan logs recorded yet.
+                No scan logs found for this filter.
               </Text>
             </View>
           }
-          /* 🔴 EXPLICIT PAGINATION FOOTER */
           ListFooterComponent={
-            logs.length > 0 && meta ? (
+            logs.length > 0 && meta && meta.totalPages > 1 ? (
               <View style={styles.paginationWrapper}>
                 <TouchableOpacity
                   style={[
@@ -224,7 +361,7 @@ export default function AdminLogsScreen() {
                     },
                   ]}
                   disabled={meta.currentPage === 1 || isLoading}
-                  onPress={() => fetchLogs(meta.currentPage - 1)}
+                  onPress={() => fetchLogs(meta.currentPage - 1, activeTab)}
                 >
                   <Feather
                     name="chevron-left"
@@ -263,7 +400,7 @@ export default function AdminLogsScreen() {
                     },
                   ]}
                   disabled={!meta.hasMore || isLoading}
-                  onPress={() => fetchLogs(meta.currentPage + 1)}
+                  onPress={() => fetchLogs(meta.currentPage + 1, activeTab)}
                 >
                   <Text
                     style={[
@@ -309,6 +446,23 @@ const styles = StyleSheet.create({
   headerTitle: { ...FONTS.header, fontSize: 24 },
   totalLogs: { ...FONTS.body, fontWeight: "600" },
 
+  // 🔴 NEW: Styles for the scrollable tab row
+  tabsWrapper: {
+    marginBottom: 16,
+  },
+  tabsScrollContent: {
+    paddingHorizontal: SIZES.padding,
+    paddingVertical: 4,
+  },
+  tab: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    alignItems: "center",
+    borderRadius: SIZES.radius - 4,
+    marginRight: 12, // Provides spacing between the pill tabs
+  },
+  tabText: { ...FONTS.body, fontSize: 13, letterSpacing: 0.5 },
+
   listContent: { paddingHorizontal: SIZES.padding, paddingBottom: 40 },
 
   logCard: {
@@ -326,6 +480,9 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(0,0,0,0.05)",
+    paddingBottom: 12,
   },
   statusBadge: {
     flexDirection: "row",
@@ -343,13 +500,12 @@ const styles = StyleSheet.create({
   },
   timeText: { ...FONTS.body, fontSize: 12, fontWeight: "500" },
 
-  logBody: { flexDirection: "row", alignItems: "center" },
-  participantInfo: { flex: 1 },
-  scannerInfo: { flex: 0.8, paddingLeft: 16 },
+  logBody: { flexDirection: "row", paddingTop: 4 },
+  participantInfo: { flex: 1.3, justifyContent: "flex-start" },
+  scannerInfo: { flex: 0.9, paddingLeft: 12, justifyContent: "flex-start" },
 
   divider: {
     width: 1,
-    height: "100%",
     backgroundColor: "#E2E8F0",
     marginHorizontal: 8,
   },
@@ -359,12 +515,48 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "700",
     letterSpacing: 1,
-    marginBottom: 4,
+    marginBottom: 6,
   },
-  value: { ...FONTS.body, fontSize: 15, fontWeight: "600", marginBottom: 2 },
+
+  attendeeName: {
+    ...FONTS.body,
+    fontSize: 16,
+    fontWeight: "700",
+    marginBottom: 2,
+  },
+  attendeeUniversity: { ...FONTS.muted, fontSize: 12, marginBottom: 10 },
+
+  metaRow: { flexDirection: "row", alignItems: "center", marginBottom: 8 },
+  categoryBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    borderRadius: 6,
+    marginRight: 8,
+  },
+  categoryBadgeText: {
+    ...FONTS.body,
+    fontSize: 9,
+    fontWeight: "800",
+    textTransform: "uppercase",
+  },
+
+  roleBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    alignSelf: "flex-start",
+    marginTop: 6,
+  },
+  roleBadgeText: {
+    ...FONTS.body,
+    fontSize: 10,
+    fontWeight: "800",
+    textTransform: "uppercase",
+  },
+
   tokenText: {
     ...FONTS.body,
-    fontSize: 12,
+    fontSize: 11,
     fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
   },
 
@@ -375,7 +567,6 @@ const styles = StyleSheet.create({
   },
   emptyText: { ...FONTS.body, fontSize: 16 },
 
-  // Pagination Styles
   paginationWrapper: {
     flexDirection: "row",
     justifyContent: "space-between",
