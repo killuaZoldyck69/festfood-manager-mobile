@@ -1,4 +1,3 @@
-// app/(volunteer)/logs.tsx
 import { FONTS, SIZES } from "@/constants/theme";
 import { useTheme } from "@/hooks/use-theme";
 import { apiClient } from "@/utils/apiClient";
@@ -10,6 +9,7 @@ import {
   FlatList,
   Platform,
   SafeAreaView,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -22,7 +22,6 @@ interface ScanLog {
   scannedToken: string;
   scannedAt: string;
   attendeeName: string | null;
-  // 🔴 ADDED: New fields from API
   attendeeUniversity?: string | null;
   attendeeCategory?: string | null;
 }
@@ -34,7 +33,7 @@ interface MetaData {
   hasMore: boolean;
 }
 
-type FilterTab = "ALL" | "SUCCESS" | "DUPLICATE";
+type FilterTab = "ALL" | "SUCCESS" | "DUPLICATE" | "INVALID";
 
 const formatTime = (isoString: string) => {
   const date = new Date(isoString);
@@ -82,7 +81,6 @@ export default function VolunteerLogsScreen() {
         let finalLogs = data.logs;
         let finalMeta = data.meta;
 
-        // Smart fallback in case backend ignores the limit
         if (data.logs.length > 10 && data.meta.totalPages === 1) {
           const startIndex = (pageNumber - 1) * 10;
           const endIndex = startIndex + 10;
@@ -113,14 +111,18 @@ export default function VolunteerLogsScreen() {
     fetchLogs(1, tab);
   };
 
+  // 🔴 UPDATED: Accurate colors and icons for every possible status
   const getStatusVisuals = (status: string) => {
     const normalizedStatus = status.toUpperCase();
 
+    if (normalizedStatus.includes("DEPLETED")) {
+      return { color: "#64748B", icon: "inbox", bg: "rgba(100,116,139,0.15)" }; // Slate Grey
+    }
     if (
       normalizedStatus.includes("DUPLICATE") ||
       normalizedStatus.includes("ALREADY_CLAIMED")
     ) {
-      return { color: theme.error, icon: "x-circle", bg: `${theme.error}15` };
+      return { color: theme.error, icon: "copy", bg: `${theme.error}15` };
     }
     if (normalizedStatus.includes("SUCCESS")) {
       return {
@@ -129,11 +131,18 @@ export default function VolunteerLogsScreen() {
         bg: `${theme.success}15`,
       };
     }
+    if (normalizedStatus.includes("INVALID")) {
+      return {
+        color: "#F59E0B",
+        icon: "alert-triangle",
+        bg: "rgba(245,158,11,0.15)",
+      }; // Orange
+    }
 
     return {
-      color: "#F59E0B",
-      icon: "alert-triangle",
-      bg: "rgba(245,158,11,0.15)",
+      color: "#64748B",
+      icon: "help-circle",
+      bg: "rgba(100,116,139,0.15)",
     };
   };
 
@@ -154,7 +163,6 @@ export default function VolunteerLogsScreen() {
           </Text>
         </View>
 
-        {/* 🔴 UPDATED: Professional Attendee Details Section */}
         <View style={styles.logBody}>
           <Text
             style={[styles.attendeeName, { color: theme.textMain }]}
@@ -209,38 +217,48 @@ export default function VolunteerLogsScreen() {
         )}
       </View>
 
-      <View style={[styles.tabsContainer, { backgroundColor: theme.surface }]}>
-        {(["ALL", "SUCCESS", "DUPLICATE"] as FilterTab[]).map((tab) => {
-          const isActive = activeTab === tab;
-          return (
-            <TouchableOpacity
-              key={tab}
-              style={[
-                styles.tab,
-                isActive && {
-                  backgroundColor: theme.background,
-                  shadowColor: "#000",
-                  elevation: 2,
-                  shadowOpacity: 0.1,
-                  shadowOffset: { width: 0, height: 1 },
-                },
-              ]}
-              onPress={() => handleTabChange(tab)}
-            >
-              <Text
-                style={[
-                  styles.tabText,
-                  {
-                    color: isActive ? theme.primary : theme.textMuted,
-                    fontWeight: isActive ? "700" : "500",
-                  },
-                ]}
-              >
-                {tab}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
+      {/* 🔴 NEW: Scrollable Tab Row prevents cramping on small mobile screens */}
+      <View style={styles.tabsWrapper}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabsScrollContent}
+        >
+          {(["ALL", "SUCCESS", "DUPLICATE", "INVALID"] as FilterTab[]).map(
+            (tab) => {
+              const isActive = activeTab === tab;
+              return (
+                <TouchableOpacity
+                  key={tab}
+                  style={[
+                    styles.tab,
+                    { backgroundColor: theme.surface },
+                    isActive && {
+                      backgroundColor: theme.background,
+                      shadowColor: "#000",
+                      elevation: 2,
+                      shadowOpacity: 0.1,
+                      shadowOffset: { width: 0, height: 1 },
+                    },
+                  ]}
+                  onPress={() => handleTabChange(tab)}
+                >
+                  <Text
+                    style={[
+                      styles.tabText,
+                      {
+                        color: isActive ? theme.primary : theme.textMuted,
+                        fontWeight: isActive ? "700" : "500",
+                      },
+                    ]}
+                  >
+                    {tab}
+                  </Text>
+                </TouchableOpacity>
+              );
+            },
+          )}
+        </ScrollView>
       </View>
 
       {isLoading && logs.length === 0 ? (
@@ -364,18 +382,20 @@ const styles = StyleSheet.create({
   headerTitle: { ...FONTS.header, fontSize: 24 },
   totalLogs: { ...FONTS.body, fontWeight: "600" },
 
-  tabsContainer: {
-    flexDirection: "row",
-    marginHorizontal: SIZES.padding,
+  // Scrollable Tabs Wrapper
+  tabsWrapper: {
     marginBottom: 16,
-    borderRadius: SIZES.radius,
-    padding: 4,
+  },
+  tabsScrollContent: {
+    paddingHorizontal: SIZES.padding,
+    paddingVertical: 4,
   },
   tab: {
-    flex: 1,
+    paddingHorizontal: 20,
     paddingVertical: 10,
     alignItems: "center",
     borderRadius: SIZES.radius - 4,
+    marginRight: 12,
   },
   tabText: { ...FONTS.body, fontSize: 13, letterSpacing: 0.5 },
 
@@ -416,7 +436,6 @@ const styles = StyleSheet.create({
   },
   timeText: { ...FONTS.body, fontSize: 12, fontWeight: "600" },
 
-  // 🔴 UPDATED: New Log Body Styles
   logBody: { flexDirection: "column", alignItems: "flex-start", paddingTop: 4 },
   attendeeName: {
     ...FONTS.body,
