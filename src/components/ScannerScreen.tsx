@@ -14,13 +14,14 @@ import {
   View,
 } from "react-native";
 
-// Type definitions for our scan outcomes
+// 🔴 UPDATED: Added DEPLETED status
 type ScanStatus =
   | "IDLE"
   | "PROCESSING"
   | "SUCCESS"
   | "ALREADY_CLAIMED"
-  | "INVALID";
+  | "INVALID"
+  | "DEPLETED";
 
 interface ScanData {
   name?: string;
@@ -32,16 +33,13 @@ interface ScannerScreenProps {
   role: "ADMIN" | "VOLUNTEER";
 }
 
-// 🔴 NEW: Smart Time Formatter
 const formatTime = (dateString: string | undefined) => {
   if (!dateString) return "Unknown Time";
 
-  // If the backend already formatted it beautifully (e.g. "12:05 PM"), leave it alone
   if (dateString.match(/AM|PM/i)) return dateString;
 
-  // Otherwise, convert the ugly ISO string into a beautiful time string
   const date = new Date(dateString);
-  if (isNaN(date.getTime())) return dateString; // Fallback just in case
+  if (isNaN(date.getTime())) return dateString;
 
   return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 };
@@ -108,14 +106,20 @@ export default function ScannerScreen({ role }: ScannerScreenProps) {
         });
         setStatus("SUCCESS");
       } else {
-        // Smart Error Matching
+        // 🔴 UPDATED: Smart Error Matching checks for DEPLETED
         const errorMessage = (
+          responseData.status ||
           responseData.error ||
           responseData.message ||
           ""
         ).toUpperCase();
 
         if (
+          errorMessage.includes("DEPLETED") ||
+          errorMessage.includes("NO FOOD")
+        ) {
+          setStatus("DEPLETED");
+        } else if (
           errorMessage.includes("ALREADY") ||
           errorMessage.includes("CLAIMED") ||
           errorMessage.includes("DUPLICATE")
@@ -143,7 +147,6 @@ export default function ScannerScreen({ role }: ScannerScreenProps) {
 
   return (
     <View style={styles.container}>
-      {/* CAMERA VIEWFINDER */}
       <CameraView
         style={StyleSheet.absoluteFillObject}
         facing="back"
@@ -213,13 +216,11 @@ export default function ScannerScreen({ role }: ScannerScreenProps) {
         </View>
       </CameraView>
 
-      {/* FULL SCREEN OUTCOME OVERLAYS */}
       <Modal
         visible={status !== "IDLE" && status !== "PROCESSING"}
         animationType="fade"
         transparent={false}
       >
-        {/* SUCCESS (GREEN) */}
         {status === "SUCCESS" && (
           <Pressable
             style={[styles.outcomeContainer, { backgroundColor: "#10B981" }]}
@@ -246,7 +247,6 @@ export default function ScannerScreen({ role }: ScannerScreenProps) {
           </Pressable>
         )}
 
-        {/* ALREADY CLAIMED (RED) */}
         {status === "ALREADY_CLAIMED" && (
           <Pressable
             style={[styles.outcomeContainer, { backgroundColor: "#EF4444" }]}
@@ -274,7 +274,6 @@ export default function ScannerScreen({ role }: ScannerScreenProps) {
               </View>
               <View style={styles.cardFooter}>
                 <Feather name="clock" size={16} color="#6B7280" />
-                {/* 🔴 THE FIX: Format the time string beautifully here */}
                 <Text
                   style={[styles.outcomeCardSubtitle, { fontWeight: "700" }]}
                 >
@@ -287,7 +286,6 @@ export default function ScannerScreen({ role }: ScannerScreenProps) {
           </Pressable>
         )}
 
-        {/* INVALID (ORANGE) */}
         {status === "INVALID" && (
           <Pressable
             style={[styles.outcomeContainer, { backgroundColor: "#F59E0B" }]}
@@ -329,6 +327,55 @@ export default function ScannerScreen({ role }: ScannerScreenProps) {
                 <Ionicons name="qr-code-outline" size={16} color="#FFF" />
                 <Text style={[styles.outcomeCardSubtitle, { color: "#FFF" }]}>
                   Scanning Error 404
+                </Text>
+              </View>
+            </View>
+
+            <Text style={styles.tapToDismiss}>TAP ANYWHERE TO DISMISS</Text>
+          </Pressable>
+        )}
+
+        {/* 🔴 NEW: The Out of Stock / Depleted Modal UI */}
+        {status === "DEPLETED" && (
+          <Pressable
+            style={[styles.outcomeContainer, { backgroundColor: "#334155" }]}
+            onPress={resetScanner}
+          >
+            <Feather
+              name="inbox"
+              size={100}
+              color="#FFF"
+              style={{ marginBottom: 24 }}
+            />
+            <Text style={styles.outcomeTitle}>OUT OF STOCK</Text>
+
+            <View style={styles.outcomeCard}>
+              <Text style={[styles.outcomeCardEyebrow, { color: "#64748B" }]}>
+                INVENTORY DEPLETED
+              </Text>
+              <Text
+                style={[
+                  styles.outcomeCardName,
+                  { color: "#111827", marginVertical: 16 },
+                ]}
+              >
+                0 Food Items Remaining
+              </Text>
+              <View style={styles.divider} />
+              <View style={[styles.cardFooter, { justifyContent: "center" }]}>
+                <Feather
+                  name="alert-circle"
+                  size={16}
+                  color="#64748B"
+                  style={{ marginRight: 6 }}
+                />
+                <Text
+                  style={[
+                    styles.outcomeCardSubtitle,
+                    { color: "#475569", marginLeft: 0 },
+                  ]}
+                >
+                  Contact an Admin to update total inventory.
                 </Text>
               </View>
             </View>

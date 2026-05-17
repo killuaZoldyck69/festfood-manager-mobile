@@ -6,7 +6,6 @@ import { useFocusEffect } from "expo-router";
 import React, { useCallback, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   Modal,
   Platform,
@@ -80,9 +79,15 @@ export default function AdminDirectoryScreen() {
   const [claimConfirmAttendee, setClaimConfirmAttendee] =
     useState<Attendee | null>(null);
 
+  // 🔴 NEW: State to manage our custom error/alert modal
+  const [errorModalInfo, setErrorModalInfo] = useState<{
+    title: string;
+    message: string;
+    type: "OUT_OF_STOCK" | "ERROR";
+  } | null>(null);
+
   useFocusEffect(
     useCallback(() => {
-      // 🔴 FIX: Instantly trigger loading spinner while we wait for the 500ms delay
       setIsLoading(true);
 
       const delayDebounceFn = setTimeout(() => {
@@ -182,13 +187,42 @@ export default function AdminDirectoryScreen() {
         body: JSON.stringify({ attendeeId }),
       });
 
-      if (!response.ok) throw new Error("Failed to process manual override.");
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const errMsg = (
+          errorData.message ||
+          errorData.error ||
+          ""
+        ).toUpperCase();
+
+        if (
+          errMsg.includes("NO FOOD") ||
+          errMsg.includes("INVENTORY") ||
+          errMsg.includes("DEPLETED")
+        ) {
+          throw new Error("OUT_OF_STOCK");
+        }
+        throw new Error("Failed to process manual override.");
+      }
     } catch (error: any) {
-      Alert.alert(
-        "Override Failed",
-        "Could not mark attendee as claimed. Please check your connection. Reverting change.",
-      );
       setAttendees(previousAttendees);
+
+      // 🔴 UPDATED: Trigger the custom modal instead of Alert.alert
+      if (error.message === "OUT_OF_STOCK") {
+        setErrorModalInfo({
+          title: "Out of Stock",
+          message:
+            "There is no food left in the inventory! Please increase the total available food from your Dashboard before claiming more tickets.",
+          type: "OUT_OF_STOCK",
+        });
+      } else {
+        setErrorModalInfo({
+          title: "Override Failed",
+          message:
+            "Could not mark attendee as claimed. Please check your connection and try again.",
+          type: "ERROR",
+        });
+      }
     }
   };
 
@@ -336,7 +370,6 @@ export default function AdminDirectoryScreen() {
           })}
         </View>
 
-        {/* 🔴 FIX: Removed the outer `{isLoading}` wrapper and moved it inside the FlatList for a seamless transition */}
         <FlatList
           data={safeAttendees}
           keyExtractor={(item) => item.id}
@@ -505,6 +538,82 @@ export default function AdminDirectoryScreen() {
                 <Text style={styles.acceptBtnText}>Confirm Claim</Text>
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* 🔴 NEW: Custom Error & Out of Stock Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={!!errorModalInfo}
+        onRequestClose={() => setErrorModalInfo(null)}
+      >
+        <View style={styles.centerModalOverlay}>
+          <View
+            style={[
+              styles.confirmModalCard,
+              { backgroundColor: theme.background },
+            ]}
+          >
+            <View
+              style={[
+                styles.warningIconBg,
+                {
+                  // If it's an Out of Stock error, match the slate color from the scanner
+                  backgroundColor:
+                    errorModalInfo?.type === "OUT_OF_STOCK"
+                      ? "#334155"
+                      : `${theme.error}15`,
+                },
+              ]}
+            >
+              <Feather
+                name={
+                  errorModalInfo?.type === "OUT_OF_STOCK"
+                    ? "inbox"
+                    : "alert-triangle"
+                }
+                size={32}
+                color={
+                  errorModalInfo?.type === "OUT_OF_STOCK" ? "#FFF" : theme.error
+                }
+              />
+            </View>
+
+            <Text
+              style={[
+                styles.confirmModalTitle,
+                { color: theme.textMain, textAlign: "center" },
+              ]}
+            >
+              {errorModalInfo?.title}
+            </Text>
+
+            <Text
+              style={[
+                styles.confirmModalText,
+                { color: theme.textMuted, marginBottom: 32 },
+              ]}
+            >
+              {errorModalInfo?.message}
+            </Text>
+
+            <TouchableOpacity
+              style={[
+                styles.confirmBtn,
+                {
+                  backgroundColor:
+                    errorModalInfo?.type === "OUT_OF_STOCK"
+                      ? "#334155"
+                      : theme.error,
+                  width: "100%",
+                },
+              ]}
+              onPress={() => setErrorModalInfo(null)}
+            >
+              <Text style={styles.acceptBtnText}>Dismiss</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
