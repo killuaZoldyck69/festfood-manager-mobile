@@ -2,12 +2,13 @@ import { FONTS, SIZES } from "@/constants/theme";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/use-theme";
 import { apiClient } from "@/utils/apiClient";
-import { Feather } from "@expo/vector-icons";
+import { Feather, Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   Modal,
   Platform,
   RefreshControl,
@@ -16,7 +17,6 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  useWindowDimensions,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -45,8 +45,6 @@ export default function InventoryScreen({ role }: InventoryScreenProps) {
   const theme = useTheme();
   const { user, signOut } = useAuth();
 
-  const { width: screenWidth } = useWindowDimensions();
-
   const [stats, setStats] = useState<InventoryStats>(MOCK_STATS);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -54,6 +52,8 @@ export default function InventoryScreen({ role }: InventoryScreenProps) {
   const [isUpdating, setIsUpdating] = useState(false);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [inventoryInput, setInventoryInput] = useState("0");
+
+  const animatedProgress = useRef(new Animated.Value(0)).current;
 
   const fetchInventory = async () => {
     try {
@@ -130,15 +130,26 @@ export default function InventoryScreen({ role }: InventoryScreenProps) {
     }
   };
 
-  const totalActioned = (stats?.served ?? 0) + (stats?.available ?? 0);
+  const total = stats?.participants ?? 0;
+  const served = stats?.served ?? 0;
   const progressPercentage =
-    totalActioned === 0
+    total === 0
       ? 0
-      : Math.round(((stats?.served ?? 0) / totalActioned) * 100);
+      : Math.min(100, Math.max(0, Math.round((served / total) * 100)));
 
-  // Responsive calculations
-  const ringSize = Math.min(screenWidth * 0.55, 260);
-  const ringBorderWidth = ringSize * 0.07;
+  useEffect(() => {
+    Animated.timing(animatedProgress, {
+      toValue: progressPercentage,
+      duration: 800,
+      useNativeDriver: false,
+    }).start();
+  }, [progressPercentage]);
+
+  // Maps the 0-100 number to a CSS width percentage string
+  const widthInterpolation = animatedProgress.interpolate({
+    inputRange: [0, 100],
+    outputRange: ["0%", "100%"],
+  });
 
   return (
     <SafeAreaView
@@ -159,7 +170,6 @@ export default function InventoryScreen({ role }: InventoryScreenProps) {
         </View>
 
         <View style={styles.headerRight}>
-          {/* 🔴 Unified Name + Role Pill */}
           <View
             style={[styles.userPill, { backgroundColor: `${theme.primary}15` }]}
           >
@@ -176,7 +186,6 @@ export default function InventoryScreen({ role }: InventoryScreenProps) {
             </View>
           </View>
 
-          {/* 🔴 Red Logout Icon */}
           <TouchableOpacity onPress={signOut} style={styles.logoutBtn}>
             <Feather name="log-out" size={22} color={theme.error} />
           </TouchableOpacity>
@@ -202,50 +211,54 @@ export default function InventoryScreen({ role }: InventoryScreenProps) {
           />
         ) : (
           <>
-            {/* Responsive Hero Progress Ring */}
+            {/* 🔴 NEW: Animated Progress Hero Card */}
             <View style={[styles.heroCard, { backgroundColor: theme.surface }]}>
-              <View
-                style={[
-                  styles.progressRingWrapper,
-                  {
-                    width: ringSize,
-                    height: ringSize,
-                    borderRadius: ringSize / 2,
-                    borderWidth: ringBorderWidth * 0.7,
-                    borderColor: `${theme.primary}20`,
-                  },
-                ]}
-              >
-                <View
-                  style={[
-                    styles.progressRing,
-                    {
-                      width: "100%",
-                      height: "100%",
-                      borderRadius: ringSize / 2,
-                      borderWidth: ringBorderWidth,
-                      borderColor: theme.primary,
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.progressValue,
-                      { color: theme.textMain, fontSize: ringSize * 0.22 },
-                    ]}
-                  >
-                    {progressPercentage}%
-                  </Text>
-                  <Text
-                    style={[styles.progressLabel, { color: theme.textMuted }]}
-                  >
+              <View style={styles.heroTextRow}>
+                <View>
+                  <Text style={[styles.heroTitle, { color: theme.textMuted }]}>
                     Food Claimed
                   </Text>
+                  <Text style={[styles.heroValue, { color: theme.textMain }]}>
+                    {progressPercentage}%
+                  </Text>
+                </View>
+                <View
+                  style={[
+                    styles.heroIconBadge,
+                    { backgroundColor: `${theme.primary}15` },
+                  ]}
+                >
+                  <Feather name="pie-chart" size={28} color={theme.primary} />
                 </View>
               </View>
+
+              {/* The actual progress bar track */}
+              <View
+                style={[
+                  styles.progressBarBg,
+                  { backgroundColor: `${theme.primary}20` },
+                ]}
+              >
+                <Animated.View
+                  style={[
+                    styles.progressBarFill,
+                    {
+                      backgroundColor: theme.primary,
+                      width: widthInterpolation,
+                    },
+                  ]}
+                />
+              </View>
+
+              <Text style={[styles.heroSubtitle, { color: theme.textMuted }]}>
+                <Text style={{ color: theme.textMain, fontWeight: "700" }}>
+                  {served}
+                </Text>{" "}
+                of {total} total tickets scanned
+              </Text>
             </View>
 
-            {/* 🔴 New Full-Width Participant Card */}
+            {/* Total Participants Card */}
             <View
               style={[styles.fullWidthCard, { backgroundColor: theme.surface }]}
             >
@@ -270,42 +283,117 @@ export default function InventoryScreen({ role }: InventoryScreenProps) {
             </View>
 
             <View style={styles.grid}>
+              {/* CARD 1: Total Available */}
               <View
                 style={[styles.gridCard, { backgroundColor: theme.surface }]}
               >
-                <Text style={[styles.gridTitle, { color: theme.textMuted }]}>
-                  Total Available
-                </Text>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: 8,
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.gridTitle,
+                      { color: theme.textMuted, marginBottom: 0 },
+                    ]}
+                  >
+                    Available Food
+                  </Text>
+                  <Ionicons
+                    name="fast-food-outline"
+                    size={18}
+                    color={theme.textMuted}
+                  />
+                </View>
                 <Text style={[styles.gridValue, { color: theme.textMain }]}>
                   {stats?.available ?? 0}
                 </Text>
               </View>
+
+              {/* CARD 2: Total Served */}
               <View
                 style={[styles.gridCard, { backgroundColor: theme.surface }]}
               >
-                <Text style={[styles.gridTitle, { color: theme.textMuted }]}>
-                  Total Served
-                </Text>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: 8,
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.gridTitle,
+                      { color: theme.textMuted, marginBottom: 0 },
+                    ]}
+                  >
+                    Total Served
+                  </Text>
+                  <Feather
+                    name="check-circle"
+                    size={18}
+                    color={theme.success}
+                  />
+                </View>
                 <Text style={[styles.gridValue, { color: theme.success }]}>
                   {stats?.served ?? 0}
                 </Text>
               </View>
+
+              {/* CARD 3: Duplicate Scans */}
               <View
                 style={[styles.gridCard, { backgroundColor: theme.surface }]}
               >
-                <Text style={[styles.gridTitle, { color: theme.error }]}>
-                  Duplicate Scans
-                </Text>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: 8,
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.gridTitle,
+                      { color: theme.error, marginBottom: 0 },
+                    ]}
+                  >
+                    Duplicate Scans
+                  </Text>
+                  <Feather name="copy" size={18} color={theme.error} />
+                </View>
                 <Text style={[styles.gridValue, { color: theme.error }]}>
                   {stats?.duplicates ?? 0}
                 </Text>
               </View>
+
+              {/* CARD 4: Invalid Tickets */}
               <View
                 style={[styles.gridCard, { backgroundColor: theme.surface }]}
               >
-                <Text style={[styles.gridTitle, { color: "#F59E0B" }]}>
-                  Invalid Tickets
-                </Text>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: 8,
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.gridTitle,
+                      { color: "#F59E0B", marginBottom: 0 },
+                    ]}
+                  >
+                    Invalid Tickets
+                  </Text>
+                  <Feather name="alert-triangle" size={18} color="#F59E0B" />
+                </View>
                 <Text style={[styles.gridValue, { color: "#F59E0B" }]}>
                   {stats?.invalid ?? 0}
                 </Text>
@@ -450,7 +538,6 @@ export default function InventoryScreen({ role }: InventoryScreenProps) {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, paddingTop: Platform.OS === "android" ? 40 : 16 },
-  container: { flex: 1 },
   scrollContent: { paddingHorizontal: SIZES.padding },
 
   // Headers
@@ -504,11 +591,10 @@ const styles = StyleSheet.create({
   },
   logoutBtn: { padding: 4 },
 
-  // Hero Card
+  // 🔴 NEW: Progress Bar Styles
   heroCard: {
-    padding: 32,
+    padding: 24,
     borderRadius: SIZES.radius,
-    alignItems: "center",
     marginBottom: 16,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
@@ -516,27 +602,47 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 2,
   },
-  progressRingWrapper: {
-    justifyContent: "center",
+  heroTextRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
   },
-  progressRing: {
-    justifyContent: "center",
-    alignItems: "center",
-    borderTopColor: "transparent",
-    borderRightColor: "transparent",
-    transform: [{ rotate: "-45deg" }],
-  },
-  progressValue: {
-    ...FONTS.header,
-    transform: [{ rotate: "45deg" }],
-    marginTop: 12,
-  },
-  progressLabel: {
+  heroTitle: {
     ...FONTS.body,
     fontSize: 14,
-    fontWeight: "500",
-    transform: [{ rotate: "45deg" }],
+    fontWeight: "700",
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+    marginBottom: 4,
+  },
+  heroValue: {
+    ...FONTS.header,
+    fontSize: 48,
+  },
+  heroIconBadge: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  progressBarBg: {
+    height: 12,
+    borderRadius: 6,
+    width: "100%",
+    overflow: "hidden",
+    marginVertical: 20,
+  },
+  progressBarFill: {
+    height: "100%",
+    borderRadius: 6,
+    position: "absolute",
+    left: 0,
+    top: 0,
+  },
+  heroSubtitle: {
+    ...FONTS.body,
+    fontSize: 14,
   },
 
   // Full Width Card
