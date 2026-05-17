@@ -22,6 +22,9 @@ interface ScanLog {
   scannedToken: string;
   scannedAt: string;
   attendeeName: string | null;
+  // 🔴 ADDED: New fields from API
+  attendeeUniversity?: string | null;
+  attendeeCategory?: string | null;
 }
 
 interface MetaData {
@@ -31,7 +34,6 @@ interface MetaData {
   hasMore: boolean;
 }
 
-// 🔴 ADDED: Filter Types
 type FilterTab = "ALL" | "SUCCESS" | "DUPLICATE";
 
 const formatTime = (isoString: string) => {
@@ -51,16 +53,14 @@ export default function VolunteerLogsScreen() {
   const [meta, setMeta] = useState<MetaData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // 🔴 ADDED: State for active filter tab
   const [activeTab, setActiveTab] = useState<FilterTab>("ALL");
 
   useFocusEffect(
     useCallback(() => {
       fetchLogs(1, activeTab);
-    }, [activeTab]), // Re-runs automatically if tab changes while focused
+    }, [activeTab]),
   );
 
-  // 🔴 UPDATED: fetchLogs now accepts and appends the status filter
   const fetchLogs = async (
     pageNumber: number,
     currentTab: FilterTab = activeTab,
@@ -68,7 +68,6 @@ export default function VolunteerLogsScreen() {
     setIsLoading(true);
 
     try {
-      // Build the dynamic URL based on the selected tab
       let url = `/volunteer/logs?page=${pageNumber}&limit=10`;
 
       if (currentTab !== "ALL") {
@@ -107,12 +106,11 @@ export default function VolunteerLogsScreen() {
     }
   };
 
-  // 🔴 ADDED: Handler to instantly clear UI and fetch new category
   const handleTabChange = (tab: FilterTab) => {
     setActiveTab(tab);
-    setLogs([]); // Instantly clears the old list for better UX
+    setLogs([]);
     setMeta(null);
-    fetchLogs(1, tab); // Fetches Page 1 of the new category
+    fetchLogs(1, tab);
   };
 
   const getStatusVisuals = (status: string) => {
@@ -156,16 +154,41 @@ export default function VolunteerLogsScreen() {
           </Text>
         </View>
 
+        {/* 🔴 UPDATED: Professional Attendee Details Section */}
         <View style={styles.logBody}>
-          <Text style={[styles.label, { color: theme.textMuted }]}>
-            ATTENDEE
+          <Text
+            style={[styles.attendeeName, { color: theme.textMain }]}
+            numberOfLines={1}
+          >
+            {item.attendeeName || "Unknown Attendee"}
           </Text>
-          <Text style={[styles.value, { color: theme.textMain }]}>
-            {item.attendeeName || "Unknown / Invalid Token"}
+
+          <Text
+            style={[styles.attendeeUniversity, { color: theme.textMuted }]}
+            numberOfLines={1}
+          >
+            {item.attendeeUniversity || "Invalid / Missing Token"}
           </Text>
-          <Text style={[styles.tokenText, { color: theme.textMuted }]}>
-            Token: {item.scannedToken.substring(0, 8)}...
-          </Text>
+
+          <View style={styles.metaRow}>
+            {item.attendeeCategory && (
+              <View
+                style={[
+                  styles.categoryBadge,
+                  { backgroundColor: `${theme.primary}15` },
+                ]}
+              >
+                <Text
+                  style={[styles.categoryBadgeText, { color: theme.primary }]}
+                >
+                  {item.attendeeCategory}
+                </Text>
+              </View>
+            )}
+            <Text style={[styles.tokenText, { color: theme.textMuted }]}>
+              Token: {item.scannedToken.substring(0, 8).toUpperCase()}
+            </Text>
+          </View>
         </View>
       </View>
     );
@@ -176,7 +199,7 @@ export default function VolunteerLogsScreen() {
       style={[styles.safeArea, { backgroundColor: theme.background }]}
     >
       <View style={styles.header}>
-        <Text style={[styles.headerTitle, { color: theme.primary }]}>
+        <Text style={[styles.headerTitle, { color: theme.textMain }]}>
           My Recent Scans
         </Text>
         {meta && (
@@ -186,7 +209,6 @@ export default function VolunteerLogsScreen() {
         )}
       </View>
 
-      {/* 🔴 ADDED: Interactive Filter Tabs */}
       <View style={[styles.tabsContainer, { backgroundColor: theme.surface }]}>
         {(["ALL", "SUCCESS", "DUPLICATE"] as FilterTab[]).map((tab) => {
           const isActive = activeTab === tab;
@@ -329,7 +351,7 @@ export default function VolunteerLogsScreen() {
 // STYLES
 // -----------------------------------------------------
 const styles = StyleSheet.create({
-  safeArea: { flex: 1 },
+  safeArea: { flex: 1, paddingTop: Platform.OS === "android" ? 40 : 16 },
   centerContent: { flex: 1, justifyContent: "center", alignItems: "center" },
 
   header: {
@@ -338,12 +360,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: SIZES.padding,
     paddingVertical: 16,
-    paddingTop: Platform.OS === "android" ? 40 : 16,
   },
   headerTitle: { ...FONTS.header, fontSize: 24 },
   totalLogs: { ...FONTS.body, fontWeight: "600" },
 
-  // 🔴 ADDED: Tab Styles
   tabsContainer: {
     flexDirection: "row",
     marginHorizontal: SIZES.padding,
@@ -376,6 +396,9 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(0,0,0,0.05)",
+    paddingBottom: 12,
   },
   statusBadge: {
     flexDirection: "row",
@@ -391,18 +414,32 @@ const styles = StyleSheet.create({
     marginLeft: 6,
     letterSpacing: 0.5,
   },
-  timeText: { ...FONTS.body, fontSize: 12, fontWeight: "500" },
+  timeText: { ...FONTS.body, fontSize: 12, fontWeight: "600" },
 
-  logBody: { flexDirection: "column", alignItems: "flex-start" },
+  // 🔴 UPDATED: New Log Body Styles
+  logBody: { flexDirection: "column", alignItems: "flex-start", paddingTop: 4 },
+  attendeeName: {
+    ...FONTS.body,
+    fontSize: 18,
+    fontWeight: "700",
+    marginBottom: 2,
+  },
+  attendeeUniversity: { ...FONTS.muted, fontSize: 13, marginBottom: 12 },
 
-  label: {
+  metaRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    width: "100%",
+  },
+  categoryBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
+  categoryBadgeText: {
     ...FONTS.body,
     fontSize: 10,
-    fontWeight: "700",
-    letterSpacing: 1,
-    marginBottom: 4,
+    fontWeight: "800",
+    textTransform: "uppercase",
   },
-  value: { ...FONTS.body, fontSize: 15, fontWeight: "600", marginBottom: 2 },
+
   tokenText: {
     ...FONTS.body,
     fontSize: 12,
