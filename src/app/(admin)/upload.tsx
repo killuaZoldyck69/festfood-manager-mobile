@@ -3,6 +3,7 @@ import { useTheme } from "@/hooks/use-theme";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system/legacy";
+import { useRouter } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 import * as Sharing from "expo-sharing";
 import React, { useState } from "react";
@@ -23,10 +24,102 @@ type UploadStatus = "idle" | "uploading" | "success" | "error";
 
 export default function AdminUploadScreen() {
   const theme = useTheme();
+  const router = useRouter();
 
   const [status, setStatus] = useState<UploadStatus>("idle");
   const [progress, setProgress] = useState(0);
   const [pdfUri, setPdfUri] = useState<string | null>(null);
+
+  const downloadSampleCsv = async () => {
+    const csvContent = `name,email,university,role,category
+Tanjim Rahman,tanjim.r@example.com,Shanto-Mariam University of Creative Technology,PARTICIPANT,Gaming
+Nusrat Jahan,nusrat.j@example.com,Shanto-Mariam University of Creative Technology,PARTICIPANT,Hackathon
+Arif Hasan,arif.hasan@example.com,BRAC University,PARTICIPANT,Datathon
+Ayesha Siddiqua,ayesha.s@example.com,North South University,PARTICIPANT,Project Showcase
+Mehedi Hasan,mehedi.h@example.com,Independent University Bangladesh,PARTICIPANT,Gaming
+Sarah Khan,sarah.k@example.com,Shanto-Mariam University of Creative Technology,ORGANIZER,General
+David Rozario,david.r@example.com,AIUB,PARTICIPANT,Hackathon
+Fatima Begum,fatima.b@example.com,Shanto-Mariam University of Creative Technology,PARTICIPANT,Datathon
+Rafiqul Islam,rafiqul.i@example.com,East West University,PARTICIPANT,Project Showcase
+Sumaiya Akter,sumaiya.a@example.com,Shanto-Mariam University of Creative Technology,PARTICIPANT,Gaming
+Michael Chen,michael.c@example.com,Independent University Bangladesh,PARTICIPANT,Hackathon
+Riya Das,riya.das@example.com,BRAC University,PARTICIPANT,Datathon
+Tariq Mahmud,tariq.m@example.com,North South University,PARTICIPANT,Project Showcase
+Jamil Ahmed,jamil.a@example.com,Shanto-Mariam University of Creative Technology,PARTICIPANT,Gaming
+Nabila Hossain,nabila.h@example.com,AIUB,PARTICIPANT,Hackathon
+Shahriar Alam,shahriar.a@example.com,East West University,PARTICIPANT,Datathon
+Tasnim Rahman,tasnim.r@example.com,Shanto-Mariam University of Creative Technology,PARTICIPANT,Project Showcase
+Iqbal Hossain,iqbal.h@example.com,Independent University Bangladesh,PARTICIPANT,Gaming
+Farhana Islam,farhana.i@example.com,BRAC University,PARTICIPANT,Hackathon
+Mahmudur Rahman,mahmudur.r@example.com,North South University,PARTICIPANT,Datathon
+Sadia Afrin,sadia.a@example.com,Shanto-Mariam University of Creative Technology,PARTICIPANT,Project Showcase
+Kamrul Hasan,kamrul.h@example.com,AIUB,PARTICIPANT,Gaming
+Anika Tabassum,anika.t@example.com,East West University,PARTICIPANT,Hackathon
+Habibur Rahman,habibur.r@example.com,Shanto-Mariam University of Creative Technology,PARTICIPANT,Datathon
+Samia Zaman,samia.z@example.com,Independent University Bangladesh,PARTICIPANT,Project Showcase
+Nazmul Huda,nazmul.h@example.com,BRAC University,PARTICIPANT,Gaming
+Tanzila Akter,tanzila.a@example.com,North South University,PARTICIPANT,Hackathon
+Elias Sunny,elias.s@example.com,Shanto-Mariam University of Creative Technology,PARTICIPANT,Datathon
+Mithila Farzana,mithila.f@example.com,AIUB,PARTICIPANT,Project Showcase
+Zahid Hasan,zahid.h@example.com,East West University,PARTICIPANT,Gaming
+Rubaiya Islam,rubaiya.i@example.com,Shanto-Mariam University of Creative Technology,PARTICIPANT,Hackathon
+Faisal Ahmed,faisal.a@example.com,Independent University Bangladesh,PARTICIPANT,Datathon
+Nadia Sultana,nadia.s@example.com,BRAC University,PARTICIPANT,Project Showcase
+Shafiqul Islam,shafiqul.i@example.com,North South University,PARTICIPANT,Gaming
+Ishrat Jahan,ishrat.j@example.com,Shanto-Mariam University of Creative Technology,PARTICIPANT,Hackathon
+Monir Hossain,monir.h@example.com,AIUB,PARTICIPANT,Datathon
+Rumana Akter,rumana.a@example.com,East West University,PARTICIPANT,Project Showcase
+Ashraful Islam,ashraful.i@example.com,Shanto-Mariam University of Creative Technology,PARTICIPANT,Gaming
+Farid Uddin,farid.u@example.com,Independent University Bangladesh,PARTICIPANT,Hackathon
+Salma Begum,salma.b@example.com,BRAC University,PARTICIPANT,Datathon
+Mominul Haque,mominul.h@example.com,North South University,PARTICIPANT,Project Showcase
+Shirin Akter,shirin.a@example.com,Shanto-Mariam University of Creative Technology,PARTICIPANT,Gaming
+Imran Hasan,imran.h@example.com,AIUB,PARTICIPANT,Hackathon
+Tahmina Akhter,tahmina.a@example.com,East West University,PARTICIPANT,Datathon
+Asif Iqbal,asif.i@example.com,Shanto-Mariam University of Creative Technology,PARTICIPANT,Project Showcase
+Laila Parveen,laila.p@example.com,Independent University Bangladesh,PARTICIPANT,Gaming
+Rashedul Islam,rashedul.i@example.com,BRAC University,PARTICIPANT,Hackathon
+Jannatul Ferdous,jannatul.f@example.com,North South University,PARTICIPANT,Datathon
+Aminul Islam,aminul.i@example.com,Shanto-Mariam University of Creative Technology,FACULTY,General
+Md Akram Hossain,akram.h@smuct.edu.bd,Shanto-Mariam University of Creative Technology,FACULTY,General`;
+
+    const filename = "Sample_Fest_Attendees.csv";
+
+    if (Platform.OS === "web") {
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const link = document.createElement("a");
+      const url = URL.createObjectURL(blob);
+      link.setAttribute("href", url);
+      link.setAttribute("download", filename);
+      link.style.visibility = "hidden";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } else {
+      try {
+        const fileUri = `${FileSystem.documentDirectory}${filename}`;
+        await FileSystem.writeAsStringAsync(fileUri, csvContent, {
+          encoding: FileSystem.EncodingType.UTF8,
+        });
+
+        const isAvailable = await Sharing.isAvailableAsync();
+        if (isAvailable) {
+          await Sharing.shareAsync(fileUri, {
+            mimeType: "text/csv",
+            dialogTitle: "Save Sample CSV",
+            UTI: "public.comma-separated-values-text",
+          });
+        } else {
+          Alert.alert(
+            "Sharing Unavailable",
+            "Cannot save files on this device.",
+          );
+        }
+      } catch (error) {
+        Alert.alert("Error", "Failed to generate sample CSV.");
+      }
+    }
+  };
 
   const pickDocument = async () => {
     try {
@@ -255,7 +348,10 @@ export default function AdminUploadScreen() {
           <Text style={styles.codeText}>role</Text>,{" "}
           <Text style={styles.codeText}>category</Text>.
         </Text>
-        <TouchableOpacity style={styles.downloadRow}>
+        <TouchableOpacity
+          style={styles.downloadRow}
+          onPress={downloadSampleCsv}
+        >
           <Feather name="download" size={16} color={theme.primary} />
           <Text style={[styles.downloadText, { color: theme.primary }]}>
             Download Sample CSV
@@ -286,9 +382,6 @@ export default function AdminUploadScreen() {
           </View>
           <Text style={[styles.dropzoneTitle, { color: theme.textMain }]}>
             Tap to select CSV file
-          </Text>
-          <Text style={[styles.dropzoneSubtitle, { color: theme.textMuted }]}>
-            Max file size: 5MB
           </Text>
         </TouchableOpacity>
       )}
@@ -332,7 +425,10 @@ export default function AdminUploadScreen() {
           <TouchableOpacity
             style={[styles.secondaryButton, { borderColor: theme.primary }]}
             activeOpacity={0.8}
-            onPress={() => setStatus("idle")}
+            onPress={() => {
+              setStatus("idle");
+              router.push("/directory");
+            }}
           >
             <Feather
               name="eye"
