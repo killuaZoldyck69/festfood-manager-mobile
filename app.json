@@ -1,24 +1,28 @@
 {
   "expo": {
-    "name": "festfood-manager-mobile",
+    "name": "FestFood Manager",
     "slug": "fest-food-manager",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/my-custom-icon.png",
     "scheme": "festfoodmanagermobile",
     "userInterfaceStyle": "light",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/images/my-custom-icon.png"
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "backgroundColor": "#FFFFFF",
+        "foregroundImage": "./assets/images/my-custom-icon.png",
+        "backgroundImage": "./assets/images/my-custom-icon.png",
+        "monochromeImage": "./assets/images/my-custom-icon.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.killuazoldycksorganization.festfoodmanager"
+      "package": "com.killuazoldycksorganization.festfoodmanager",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "output": "static",
@@ -38,18 +42,24 @@
       ],
       "expo-secure-store",
       "expo-sharing",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow CSE Fest to access your camera to scan QR tickets."
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ]
     ],
     "experiments": {
-      "typedRoutes": true,
-      "reactCompiler": true
-    },
-    "extra": {
-      "router": {},
-      "eas": {
-        "projectId": "29d3ca6b-7385-4a89-9a4e-f258e1e30140"
-      }
-    },
-    "owner": "killuazoldycks-organization"
+      "typedRoutes": true
+    }
   }
 }

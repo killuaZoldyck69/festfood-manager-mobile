@@ -10,10 +10,13 @@ export const authClient = createAuthClient({
   baseURL: AUTH_URL,
   fetchOptions: {
     credentials: "include",
-    headers: Platform.OS !== "web" ? { Origin: AUTH_URL } : undefined,
+    headers:
+      Platform.OS !== "web"
+        ? { Origin: "festfoodmanagermobile://" }
+        : undefined,
   },
   plugins:
     Platform.OS !== "web"
-      ? [expoClient({ scheme: "festfoodmanager", storage: SecureStore })]
+      ? [expoClient({ scheme: "festfoodmanagermobile", storage: SecureStore })]
       : [],
 });
