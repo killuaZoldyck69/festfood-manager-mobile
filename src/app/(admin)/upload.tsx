@@ -8,6 +8,7 @@ import * as SecureStore from "expo-secure-store";
 import * as Sharing from "expo-sharing";
 import React, { useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Platform,
   ScrollView,
@@ -30,59 +31,106 @@ export default function AdminUploadScreen() {
   const [progress, setProgress] = useState(0);
   const [pdfUri, setPdfUri] = useState<string | null>(null);
 
-  const downloadSampleCsv = async () => {
-    const csvContent = `name,email,university,role,category
-Tanjim Rahman,tanjim.r@example.com,Shanto-Mariam University of Creative Technology,PARTICIPANT,Gaming
-Nusrat Jahan,nusrat.j@example.com,Shanto-Mariam University of Creative Technology,PARTICIPANT,Hackathon
-Arif Hasan,arif.hasan@example.com,BRAC University,PARTICIPANT,Datathon
-Ayesha Siddiqua,ayesha.s@example.com,North South University,PARTICIPANT,Project Showcase
-Mehedi Hasan,mehedi.h@example.com,Independent University Bangladesh,PARTICIPANT,Gaming
-Sarah Khan,sarah.k@example.com,Shanto-Mariam University of Creative Technology,ORGANIZER,General
-David Rozario,david.r@example.com,AIUB,PARTICIPANT,Hackathon
-Fatima Begum,fatima.b@example.com,Shanto-Mariam University of Creative Technology,PARTICIPANT,Datathon
-Rafiqul Islam,rafiqul.i@example.com,East West University,PARTICIPANT,Project Showcase
-Sumaiya Akter,sumaiya.a@example.com,Shanto-Mariam University of Creative Technology,PARTICIPANT,Gaming
-Michael Chen,michael.c@example.com,Independent University Bangladesh,PARTICIPANT,Hackathon
-Riya Das,riya.das@example.com,BRAC University,PARTICIPANT,Datathon
-Tariq Mahmud,tariq.m@example.com,North South University,PARTICIPANT,Project Showcase
-Jamil Ahmed,jamil.a@example.com,Shanto-Mariam University of Creative Technology,PARTICIPANT,Gaming
-Nabila Hossain,nabila.h@example.com,AIUB,PARTICIPANT,Hackathon
-Shahriar Alam,shahriar.a@example.com,East West University,PARTICIPANT,Datathon
-Tasnim Rahman,tasnim.r@example.com,Shanto-Mariam University of Creative Technology,PARTICIPANT,Project Showcase
-Iqbal Hossain,iqbal.h@example.com,Independent University Bangladesh,PARTICIPANT,Gaming
-Farhana Islam,farhana.i@example.com,BRAC University,PARTICIPANT,Hackathon
-Mahmudur Rahman,mahmudur.r@example.com,North South University,PARTICIPANT,Datathon
-Sadia Afrin,sadia.a@example.com,Shanto-Mariam University of Creative Technology,PARTICIPANT,Project Showcase
-Kamrul Hasan,kamrul.h@example.com,AIUB,PARTICIPANT,Gaming
-Anika Tabassum,anika.t@example.com,East West University,PARTICIPANT,Hackathon
-Habibur Rahman,habibur.r@example.com,Shanto-Mariam University of Creative Technology,PARTICIPANT,Datathon
-Samia Zaman,samia.z@example.com,Independent University Bangladesh,PARTICIPANT,Project Showcase
-Nazmul Huda,nazmul.h@example.com,BRAC University,PARTICIPANT,Gaming
-Tanzila Akter,tanzila.a@example.com,North South University,PARTICIPANT,Hackathon
-Elias Sunny,elias.s@example.com,Shanto-Mariam University of Creative Technology,PARTICIPANT,Datathon
-Mithila Farzana,mithila.f@example.com,AIUB,PARTICIPANT,Project Showcase
-Zahid Hasan,zahid.h@example.com,East West University,PARTICIPANT,Gaming
-Rubaiya Islam,rubaiya.i@example.com,Shanto-Mariam University of Creative Technology,PARTICIPANT,Hackathon
-Faisal Ahmed,faisal.a@example.com,Independent University Bangladesh,PARTICIPANT,Datathon
-Nadia Sultana,nadia.s@example.com,BRAC University,PARTICIPANT,Project Showcase
-Shafiqul Islam,shafiqul.i@example.com,North South University,PARTICIPANT,Gaming
-Ishrat Jahan,ishrat.j@example.com,Shanto-Mariam University of Creative Technology,PARTICIPANT,Hackathon
-Monir Hossain,monir.h@example.com,AIUB,PARTICIPANT,Datathon
-Rumana Akter,rumana.a@example.com,East West University,PARTICIPANT,Project Showcase
-Ashraful Islam,ashraful.i@example.com,Shanto-Mariam University of Creative Technology,PARTICIPANT,Gaming
-Farid Uddin,farid.u@example.com,Independent University Bangladesh,PARTICIPANT,Hackathon
-Salma Begum,salma.b@example.com,BRAC University,PARTICIPANT,Datathon
-Mominul Haque,mominul.h@example.com,North South University,PARTICIPANT,Project Showcase
-Shirin Akter,shirin.a@example.com,Shanto-Mariam University of Creative Technology,PARTICIPANT,Gaming
-Imran Hasan,imran.h@example.com,AIUB,PARTICIPANT,Hackathon
-Tahmina Akhter,tahmina.a@example.com,East West University,PARTICIPANT,Datathon
-Asif Iqbal,asif.i@example.com,Shanto-Mariam University of Creative Technology,PARTICIPANT,Project Showcase
-Laila Parveen,laila.p@example.com,Independent University Bangladesh,PARTICIPANT,Gaming
-Rashedul Islam,rashedul.i@example.com,BRAC University,PARTICIPANT,Hackathon
-Jannatul Ferdous,jannatul.f@example.com,North South University,PARTICIPANT,Datathon
-Aminul Islam,aminul.i@example.com,Shanto-Mariam University of Creative Technology,FACULTY,General
-Md Akram Hossain,akram.h@smuct.edu.bd,Shanto-Mariam University of Creative Technology,FACULTY,General`;
+  // New State for the Redownload process
+  const [isDownloading, setIsDownloading] = useState(false);
 
+  // --- REDOWNLOAD ALL TICKETS ---
+  const redownloadAllTickets = async () => {
+    setIsDownloading(true);
+    try {
+      const endpoint = `${BASE_URL}/api/admin/tickets/download-all`;
+      const headers: Record<string, string> = { Accept: "application/pdf" };
+
+      if (Platform.OS !== "web") {
+        headers["Origin"] = BASE_URL || "";
+        const token = await SecureStore.getItemAsync(
+          "better-auth.session_token",
+        );
+        if (token) headers["Authorization"] = `Bearer ${token}`;
+      } else {
+        const token = localStorage.getItem("better-auth.session_token");
+        if (token) headers["Authorization"] = `Bearer ${token}`;
+      }
+
+      if (Platform.OS === "web") {
+        const response = await fetch(endpoint, {
+          method: "GET",
+          credentials: "include",
+          headers,
+        });
+
+        if (!response.ok) throw new Error("Failed to generate tickets PDF.");
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `All_Fest_Tickets_Backup_${Date.now()}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      } else if (Platform.OS === "android") {
+        // Android-specific backup file save prompt via SAF
+        const filename = `All_Fest_Tickets_Backup_${Date.now()}.pdf`;
+        const permissions =
+          await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
+
+        if (permissions.granted) {
+          const fileUri =
+            await FileSystem.StorageAccessFramework.createFileAsync(
+              permissions.directoryUri,
+              filename,
+              "application/pdf",
+            );
+
+          // Standard cache fetch to stream raw bytes locally first
+          const cacheUri = `${FileSystem.documentDirectory}${filename}`;
+          const downloadRes = await FileSystem.downloadAsync(
+            endpoint,
+            cacheUri,
+            { headers },
+          );
+
+          if (downloadRes.status !== 200)
+            throw new Error("Server returned error response.");
+
+          const base64Data = await FileSystem.readAsStringAsync(cacheUri, {
+            encoding: "base64",
+          });
+          await FileSystem.writeAsStringAsync(fileUri, base64Data, {
+            encoding: "base64",
+          });
+          Alert.alert("Success 💾", "All tickets saved to chosen directory!");
+        }
+      } else {
+        const fileUri = `${FileSystem.documentDirectory}All_Fest_Tickets_Backup_${Date.now()}.pdf`;
+        const downloadRes = await FileSystem.downloadAsync(endpoint, fileUri, {
+          headers,
+        });
+
+        if (downloadRes.status !== 200)
+          throw new Error("Failed to fetch the tickets.");
+
+        const isAvailable = await Sharing.isAvailableAsync();
+        if (isAvailable) {
+          await Sharing.shareAsync(fileUri, {
+            mimeType: "application/pdf",
+            dialogTitle: "Print or Share All Tickets",
+            UTI: "com.adobe.pdf",
+          });
+        }
+      }
+    } catch (error: any) {
+      Alert.alert("Download Failed", error.message);
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  // --- FIXED DOWNLOAD SAMPLE CSV FUNCTION ---
+  const downloadSampleCsv = async () => {
+    const csvContent = `name,email,university,role,category\nTanjim Rahman,tanjim.r@example.com,University,PARTICIPANT,Gaming`;
     const filename = "Sample_Fest_Attendees.csv";
 
     if (Platform.OS === "web") {
@@ -95,7 +143,33 @@ Md Akram Hossain,akram.h@smuct.edu.bd,Shanto-Mariam University of Creative Techn
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+    } else if (Platform.OS === "android") {
+      // 🤖 Android Storage Access Framework (SAF) Intercept
+      try {
+        const permissions =
+          await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
+
+        if (permissions.granted) {
+          const fileUri =
+            await FileSystem.StorageAccessFramework.createFileAsync(
+              permissions.directoryUri,
+              filename,
+              "text/csv",
+            );
+
+          await FileSystem.writeAsStringAsync(fileUri, csvContent, {
+            encoding: FileSystem.EncodingType.UTF8,
+          });
+          Alert.alert(
+            "Success 💾",
+            "Sample CSV saved successfully to your selected folder!",
+          );
+        }
+      } catch (error) {
+        Alert.alert("Error", "Failed to save file to designated directory.");
+      }
     } else {
+      // 🍎 Fallback structural compliance for iOS
       try {
         const fileUri = `${FileSystem.documentDirectory}${filename}`;
         await FileSystem.writeAsStringAsync(fileUri, csvContent, {
@@ -109,11 +183,6 @@ Md Akram Hossain,akram.h@smuct.edu.bd,Shanto-Mariam University of Creative Techn
             dialogTitle: "Save Sample CSV",
             UTI: "public.comma-separated-values-text",
           });
-        } else {
-          Alert.alert(
-            "Sharing Unavailable",
-            "Cannot save files on this device.",
-          );
         }
       } catch (error) {
         Alert.alert("Error", "Failed to generate sample CSV.");
@@ -145,7 +214,6 @@ Md Akram Hossain,akram.h@smuct.edu.bd,Shanto-Mariam University of Creative Techn
   const uploadFile = async (file: DocumentPicker.DocumentPickerAsset) => {
     setStatus("uploading");
     setProgress(10);
-
     let progressInterval: ReturnType<typeof setInterval> | undefined;
 
     try {
@@ -171,6 +239,9 @@ Md Akram Hossain,akram.h@smuct.edu.bd,Shanto-Mariam University of Creative Techn
         const token = await SecureStore.getItemAsync(
           "better-auth.session_token",
         );
+        if (token) headers["Authorization"] = `Bearer ${token}`;
+      } else {
+        const token = localStorage.getItem("better-auth.session_token");
         if (token) headers["Authorization"] = `Bearer ${token}`;
       }
 
@@ -251,11 +322,6 @@ Md Akram Hossain,akram.h@smuct.edu.bd,Shanto-Mariam University of Creative Techn
           dialogTitle: "Print or Share Fest Tickets",
           UTI: "com.adobe.pdf",
         });
-      } else {
-        Alert.alert(
-          "Sharing Unavailable",
-          "Sharing is not supported on this device.",
-        );
       }
     } catch (error: any) {
       Alert.alert("Share Error", error.message);
@@ -272,7 +338,7 @@ Md Akram Hossain,akram.h@smuct.edu.bd,Shanto-Mariam University of Creative Techn
         </Text>
         <Text style={[styles.subtitle, { color: theme.textMuted }]}>
           Streamline your festival operations by bulk importing attendee data
-          and generating ready-to-print tickets with unique QR tokens.
+          and generating ready-to-print tickets.
         </Text>
       </View>
 
@@ -341,7 +407,7 @@ Md Akram Hossain,akram.h@smuct.edu.bd,Shanto-Mariam University of Creative Techn
           </Text>
         </View>
         <Text style={[styles.guideText, { color: theme.textMain }]}>
-          Ensure your CSV has these exact column headers:{" "}
+          Ensure your CSV has exact column headers:{" "}
           <Text style={styles.codeText}>name</Text>,{" "}
           <Text style={styles.codeText}>email</Text>,{" "}
           <Text style={styles.codeText}>university</Text>,{" "}
@@ -360,30 +426,63 @@ Md Akram Hossain,akram.h@smuct.edu.bd,Shanto-Mariam University of Creative Techn
       </View>
 
       {status !== "success" && status !== "uploading" && (
-        <TouchableOpacity
-          style={[
-            styles.dropzone,
-            { borderColor: theme.border, backgroundColor: theme.surface },
-          ]}
-          activeOpacity={0.7}
-          onPress={pickDocument}
-        >
-          <View
+        <>
+          <TouchableOpacity
             style={[
-              styles.iconCircle,
-              { backgroundColor: `${theme.primary}15` },
+              styles.dropzone,
+              { borderColor: theme.border, backgroundColor: theme.surface },
             ]}
+            activeOpacity={0.7}
+            onPress={pickDocument}
           >
-            <Ionicons
-              name="cloud-upload-outline"
-              size={32}
-              color={theme.primary}
-            />
-          </View>
-          <Text style={[styles.dropzoneTitle, { color: theme.textMain }]}>
-            Tap to select CSV file
-          </Text>
-        </TouchableOpacity>
+            <View
+              style={[
+                styles.iconCircle,
+                { backgroundColor: `${theme.primary}15` },
+              ]}
+            >
+              <Ionicons
+                name="cloud-upload-outline"
+                size={32}
+                color={theme.primary}
+              />
+            </View>
+            <Text style={[styles.dropzoneTitle, { color: theme.textMain }]}>
+              Tap to select CSV file
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.secondaryButton,
+              { borderColor: theme.primary, marginBottom: 24 },
+            ]}
+            activeOpacity={0.8}
+            onPress={redownloadAllTickets}
+            disabled={isDownloading}
+          >
+            {isDownloading ? (
+              <ActivityIndicator
+                color={theme.primary}
+                style={{ marginRight: 8 }}
+              />
+            ) : (
+              <Feather
+                name="download-cloud"
+                size={20}
+                color={theme.primary}
+                style={{ marginRight: 8 }}
+              />
+            )}
+            <Text
+              style={[styles.secondaryButtonText, { color: theme.primary }]}
+            >
+              {isDownloading
+                ? "GENERATING PDF..."
+                : "REDOWNLOAD ALL EXISTING TICKETS"}
+            </Text>
+          </TouchableOpacity>
+        </>
       )}
 
       {status === "success" && (
@@ -532,7 +631,6 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   dropzoneTitle: { ...FONTS.header, fontSize: 20, marginBottom: 8 },
-  dropzoneSubtitle: { ...FONTS.muted },
   successContainer: { marginTop: 8 },
   successCard: {
     flexDirection: "row",
@@ -550,11 +648,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 12,
-    shadowColor: "#4F46E5",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
   },
   primaryButtonText: {
     color: "#FFF",

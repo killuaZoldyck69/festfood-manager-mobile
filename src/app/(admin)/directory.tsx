@@ -79,7 +79,6 @@ export default function AdminDirectoryScreen() {
   const [claimConfirmAttendee, setClaimConfirmAttendee] =
     useState<Attendee | null>(null);
 
-  // 🔴 NEW: State to manage our custom error/alert modal
   const [errorModalInfo, setErrorModalInfo] = useState<{
     title: string;
     message: string;
@@ -89,7 +88,6 @@ export default function AdminDirectoryScreen() {
   useFocusEffect(
     useCallback(() => {
       setIsLoading(true);
-
       const delayDebounceFn = setTimeout(() => {
         fetchAttendees(1, searchQuery, activeTab);
       }, 500);
@@ -98,6 +96,7 @@ export default function AdminDirectoryScreen() {
     }, [searchQuery, activeTab]),
   );
 
+  // 🧹 CLEANED: Strict reliance on backend pagination and standardized JSON shape
   const fetchAttendees = async (
     pageNumber: number,
     currentSearch: string,
@@ -115,34 +114,8 @@ export default function AdminDirectoryScreen() {
 
       if (response.ok) {
         const data = await response.json();
-
-        let fetchedAttendees = [];
-        let fetchedMeta = data.meta || null;
-
-        if (Array.isArray(data)) fetchedAttendees = data;
-        else if (data && Array.isArray(data.data)) fetchedAttendees = data.data;
-        else if (data && Array.isArray(data.attendees))
-          fetchedAttendees = data.attendees;
-
-        if (
-          fetchedAttendees.length > 10 &&
-          (!fetchedMeta || fetchedMeta.totalPages === 1)
-        ) {
-          const startIndex = (pageNumber - 1) * 10;
-          const endIndex = startIndex + 10;
-
-          fetchedMeta = {
-            totalAttendees: fetchedAttendees.length,
-            currentPage: pageNumber,
-            totalPages: Math.ceil(fetchedAttendees.length / 10),
-            hasMore: endIndex < fetchedAttendees.length,
-            currentFilter: currentTab,
-          };
-          fetchedAttendees = fetchedAttendees.slice(startIndex, endIndex);
-        }
-
-        setAttendees(fetchedAttendees);
-        setMeta(fetchedMeta);
+        setAttendees(data.attendees || []);
+        setMeta(data.meta || null);
       }
     } catch (error) {
       console.error("Failed to fetch directory:", error);
@@ -207,7 +180,6 @@ export default function AdminDirectoryScreen() {
     } catch (error: any) {
       setAttendees(previousAttendees);
 
-      // 🔴 UPDATED: Trigger the custom modal instead of Alert.alert
       if (error.message === "OUT_OF_STOCK") {
         setErrorModalInfo({
           title: "Out of Stock",
@@ -225,8 +197,6 @@ export default function AdminDirectoryScreen() {
       }
     }
   };
-
-  const safeAttendees = Array.isArray(attendees) ? attendees : [];
 
   const renderAttendee = ({ item }: { item: Attendee }) => {
     const isClaimed = item.foodClaimed;
@@ -371,7 +341,7 @@ export default function AdminDirectoryScreen() {
         </View>
 
         <FlatList
-          data={safeAttendees}
+          data={attendees}
           keyExtractor={(item) => item.id}
           renderItem={renderAttendee}
           contentContainerStyle={styles.listContent}
@@ -398,7 +368,7 @@ export default function AdminDirectoryScreen() {
             </View>
           }
           ListFooterComponent={
-            safeAttendees.length > 0 && meta && meta.totalPages > 1 ? (
+            attendees.length > 0 && meta && meta.totalPages > 1 ? (
               <View style={styles.paginationWrapper}>
                 <TouchableOpacity
                   style={[
@@ -500,11 +470,9 @@ export default function AdminDirectoryScreen() {
             >
               <Feather name="alert-circle" size={32} color={theme.primary} />
             </View>
-
             <Text style={[styles.confirmModalTitle, { color: theme.textMain }]}>
               Manual Override
             </Text>
-
             <Text style={[styles.confirmModalText, { color: theme.textMuted }]}>
               Are you sure you want to mark{" "}
               <Text style={{ color: theme.textMain, fontWeight: "700" }}>
@@ -512,7 +480,6 @@ export default function AdminDirectoryScreen() {
               </Text>
               's ticket as claimed?
             </Text>
-
             <View style={styles.confirmModalActions}>
               <TouchableOpacity
                 style={[
@@ -526,7 +493,6 @@ export default function AdminDirectoryScreen() {
                   Cancel
                 </Text>
               </TouchableOpacity>
-
               <TouchableOpacity
                 style={[
                   styles.confirmBtn,
@@ -542,7 +508,7 @@ export default function AdminDirectoryScreen() {
         </View>
       </Modal>
 
-      {/* 🔴 NEW: Custom Error & Out of Stock Modal */}
+      {/* Custom Error & Out of Stock Modal */}
       <Modal
         animationType="fade"
         transparent={true}
@@ -560,7 +526,6 @@ export default function AdminDirectoryScreen() {
               style={[
                 styles.warningIconBg,
                 {
-                  // If it's an Out of Stock error, match the slate color from the scanner
                   backgroundColor:
                     errorModalInfo?.type === "OUT_OF_STOCK"
                       ? "#334155"
@@ -580,7 +545,6 @@ export default function AdminDirectoryScreen() {
                 }
               />
             </View>
-
             <Text
               style={[
                 styles.confirmModalTitle,
@@ -589,7 +553,6 @@ export default function AdminDirectoryScreen() {
             >
               {errorModalInfo?.title}
             </Text>
-
             <Text
               style={[
                 styles.confirmModalText,
@@ -598,7 +561,6 @@ export default function AdminDirectoryScreen() {
             >
               {errorModalInfo?.message}
             </Text>
-
             <TouchableOpacity
               style={[
                 styles.confirmBtn,
@@ -635,7 +597,6 @@ export default function AdminDirectoryScreen() {
             style={[styles.modalContent, { backgroundColor: theme.background }]}
           >
             <View style={styles.dragHandle} />
-
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: theme.textMain }]}>
                 Attendee Details
@@ -799,14 +760,10 @@ export default function AdminDirectoryScreen() {
   );
 }
 
-// -----------------------------------------------------
-// STYLES
-// -----------------------------------------------------
 const styles = StyleSheet.create({
   safeArea: { flex: 1, paddingTop: Platform.OS === "android" ? 40 : 16 },
   container: { flex: 1 },
   centerContent: { flex: 1, justifyContent: "center", alignItems: "center" },
-
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -816,7 +773,6 @@ const styles = StyleSheet.create({
   },
   headerTitle: { ...FONTS.header, fontSize: 28 },
   totalLogs: { ...FONTS.body, fontWeight: "600" },
-
   searchContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -828,7 +784,6 @@ const styles = StyleSheet.create({
   },
   searchIcon: { marginRight: 12 },
   searchInput: { flex: 1, ...FONTS.body, fontSize: 16, height: "100%" },
-
   tabsContainer: {
     flexDirection: "row",
     marginHorizontal: SIZES.padding,
@@ -843,7 +798,6 @@ const styles = StyleSheet.create({
     borderRadius: SIZES.radius - 4,
   },
   tabText: { ...FONTS.body, fontSize: 13, letterSpacing: 0.5 },
-
   listContent: {
     paddingHorizontal: SIZES.padding,
     paddingTop: 16,
@@ -864,7 +818,6 @@ const styles = StyleSheet.create({
     marginRight: 16,
     marginTop: 6,
   },
-
   attendeeName: {
     ...FONTS.body,
     fontWeight: "700",
@@ -873,7 +826,6 @@ const styles = StyleSheet.create({
   },
   listSubRow: { flexDirection: "row", alignItems: "center", marginBottom: 6 },
   attendeeUniversity: { ...FONTS.muted, fontSize: 13, flexShrink: 1 },
-
   categoryBadge: {
     alignSelf: "flex-start",
     paddingHorizontal: 8,
@@ -886,7 +838,6 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     textTransform: "uppercase",
   },
-
   timeText: { ...FONTS.muted, fontSize: 13, fontWeight: "600" },
   manualClaimBtn: {
     paddingHorizontal: 14,
@@ -895,7 +846,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   manualClaimText: { ...FONTS.body, fontSize: 12, fontWeight: "700" },
-
   paginationWrapper: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -916,7 +866,6 @@ const styles = StyleSheet.create({
   pageBtnDisabled: { opacity: 0.5 },
   pageBtnText: { ...FONTS.body, fontWeight: "700", fontSize: 14 },
   pageIndicator: { ...FONTS.body, fontWeight: "600", fontSize: 14 },
-
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.4)",
@@ -951,7 +900,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-
   statusBadge: {
     flexDirection: "row",
     alignItems: "center",
@@ -969,7 +917,6 @@ const styles = StyleSheet.create({
     marginLeft: 6,
     letterSpacing: 0.5,
   },
-
   detailName: { ...FONTS.header, fontSize: 28, marginBottom: 6 },
   detailUniversity: {
     ...FONTS.body,
@@ -977,7 +924,6 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     lineHeight: 22,
   },
-
   modalMetaRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -1001,7 +947,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
   },
-
   auditTitle: {
     ...FONTS.muted,
     fontSize: 12,
@@ -1022,7 +967,6 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   auditDesc: { ...FONTS.body, fontSize: 14, lineHeight: 20 },
-
   centerModalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",

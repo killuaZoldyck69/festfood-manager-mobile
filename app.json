@@ -56,10 +56,17 @@
             "usesCleartextTraffic": true
           }
         }
-      ]
+      ],
+      "expo-image"
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "5e866717-1d36-4b2d-8378-b4ca787b5a0b"
+      }
     }
   }
 }
