@@ -1,19 +1,17 @@
 import { FONTS, SIZES } from "@/constants/theme";
 import { useTheme } from "@/hooks/use-theme";
-import { apiClient } from "@/utils/apiClient";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
-import * as FileSystem from "expo-file-system";
 import { File, Paths } from "expo-file-system";
-import { useFocusEffect, useRouter } from "expo-router";
+import * as FileSystemLegacy from "expo-file-system/legacy";
+import { useRouter } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 import * as Sharing from "expo-sharing";
-import React, { useCallback, useState } from "react";
+import React, { useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   Platform,
-  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -21,58 +19,34 @@ import {
 } from "react-native";
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
-
-// 1. Unified State Types
 type UploadStatus = "idle" | "uploading" | "downloading" | "success" | "error";
 
-export default function AdminUploadScreen() {
+interface Props {
+  hasAttendees: boolean;
+  onAttendeesUpdated: () => void;
+}
+
+export default function DataImportExport({
+  hasAttendees,
+  onAttendeesUpdated,
+}: Props) {
   const theme = useTheme();
   const router = useRouter();
 
-  // Core Status & Progress State
   const [status, setStatus] = useState<UploadStatus>("idle");
   const [progress, setProgress] = useState(0);
   const [insertedCount, setInsertedCount] = useState(0);
   const [pdfUri, setPdfUri] = useState<string | null>(null);
-
-  // Database Tracking State
-  const [hasAttendees, setHasAttendees] = useState(false);
   const [isRedownloading, setIsRedownloading] = useState(false);
 
-  // Reset and Check DB on screen focus
-  useFocusEffect(
-    useCallback(() => {
-      setStatus((prev) =>
-        prev === "uploading" || prev === "downloading" ? prev : "idle",
-      );
-      setPdfUri(null);
-      setProgress(0);
+  const getAuthHeaders = async () => {
+    const headers: Record<string, string> = { Accept: "application/json" };
+    if (Platform.OS !== "web") headers["Origin"] = BASE_URL || "";
+    const token = await SecureStore.getItemAsync("better-auth.session_token");
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    return headers;
+  };
 
-      const checkDatabaseStatus = async () => {
-        try {
-          const response = await apiClient("/admin/attendees?limit=1", {
-            method: "GET",
-          });
-          if (response.ok) {
-            const data = await response.json();
-            const count =
-              data?.meta?.totalAttendees || data?.attendees?.length || 0;
-            setHasAttendees(count > 0);
-          } else {
-            setHasAttendees(false);
-          }
-        } catch {
-          setHasAttendees(false);
-        }
-      };
-
-      checkDatabaseStatus();
-    }, []),
-  );
-
-  // =====================================================================
-  // 💾 SAMPLE CSV: MODERN FILE API
-  // =====================================================================
   const downloadSampleCsv = async () => {
     const csvContent = `name,email,studentId,university,role,category
 Kyle Evans,kyle.evans@gmail.com,19-31661-3,Military Institute of Science and Technology,PARTICIPANT,Programming Contest
@@ -133,17 +107,37 @@ Mckenzie Friedman,mckenzie.friedman@example.com,20-84567-3,Southeast University,
       link.href = URL.createObjectURL(blob);
       link.download = filename;
       link.click();
-    } else {
+    } else if (Platform.OS === "android") {
+      // 🔴 FIX 2: Force Android to open File Manager instead of WhatsApp
       try {
-        // STRICT RULE: Modern File API
+        const permissions =
+          await FileSystemLegacy.StorageAccessFramework.requestDirectoryPermissionsAsync();
+        if (permissions.granted) {
+          const fileUri =
+            await FileSystemLegacy.StorageAccessFramework.createFileAsync(
+              permissions.directoryUri,
+              filename,
+              "text/csv",
+            );
+          await FileSystemLegacy.writeAsStringAsync(fileUri, csvContent, {
+            encoding: FileSystemLegacy.EncodingType.UTF8,
+          });
+          Alert.alert(
+            "Success 💾",
+            "Sample CSV saved successfully to your selected folder!",
+          );
+        }
+      } catch (error) {
+        Alert.alert("Error", "Failed to save file to designated directory.");
+      }
+    } else {
+      // iOS fallback (Uses Share Sheet strictly for "Save to Files")
+      try {
         const csvFile = new File(Paths.cache, filename);
         await csvFile.write(csvContent);
-
-        const isAvailable = await Sharing.isAvailableAsync();
-        if (isAvailable) {
+        if (await Sharing.isAvailableAsync()) {
           await Sharing.shareAsync(csvFile.uri, {
             mimeType: "text/csv",
-            dialogTitle: "Save Sample CSV",
             UTI: "public.comma-separated-values-text",
           });
         }
@@ -153,41 +147,19 @@ Mckenzie Friedman,mckenzie.friedman@example.com,20-84567-3,Southeast University,
     }
   };
 
-  // =====================================================================
-  // 🚀 TWO-PHASE ARCHITECTURE: UPLOAD & DOWNLOAD
-  // =====================================================================
   const pickDocument = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
         type: "*/*",
         copyToCacheDirectory: true,
       });
-
       if (result.canceled) return;
-
-      const file = result.assets[0];
-      if (!file.name.toLowerCase().endsWith(".csv")) {
-        Alert.alert("Invalid File", "Please select a valid .csv file.");
-        return;
-      }
-
-      await executeTwoPhaseUpload(file);
+      if (!result.assets[0].name.toLowerCase().endsWith(".csv"))
+        return Alert.alert("Invalid File", "Select a valid .csv file.");
+      await executeTwoPhaseUpload(result.assets[0]);
     } catch (err) {
-      console.error("Document Picker Error:", err);
+      console.error("Picker Error:", err);
     }
-  };
-
-  const getAuthHeaders = async () => {
-    const headers: Record<string, string> = { Accept: "application/json" };
-    if (Platform.OS !== "web") {
-      headers["Origin"] = BASE_URL || "";
-      const token = await SecureStore.getItemAsync("better-auth.session_token");
-      if (token) headers["Authorization"] = `Bearer ${token}`;
-    } else {
-      const token = localStorage.getItem("better-auth.session_token");
-      if (token) headers["Authorization"] = `Bearer ${token}`;
-    }
-    return headers;
   };
 
   const executeTwoPhaseUpload = async (
@@ -195,16 +167,13 @@ Mckenzie Friedman,mckenzie.friedman@example.com,20-84567-3,Southeast University,
   ) => {
     setStatus("uploading");
     setProgress(0);
-
-    // --- PHASE 1: SERVER UPLOAD & PROCESSING ---
-    let progressInterval = setInterval(() => {
-      setProgress((prev) => Math.min(prev + 5, 95));
-    }, 800);
+    let progressInterval = setInterval(
+      () => setProgress((prev) => Math.min(prev + 5, 95)),
+      800,
+    );
 
     try {
-      const headers = await getAuthHeaders();
       const formData = new FormData();
-
       if (Platform.OS === "web") {
         formData.append("file", file.file as unknown as Blob);
       } else {
@@ -218,37 +187,34 @@ Mckenzie Friedman,mckenzie.friedman@example.com,20-84567-3,Southeast University,
         } as any);
       }
 
-      const uploadUrl = `${BASE_URL}/api/admin/upload`;
-      const uploadRes = await fetch(uploadUrl, {
+      const uploadHeaders = await getAuthHeaders();
+      delete uploadHeaders["Content-Type"];
+
+      const uploadRes = await fetch(`${BASE_URL}/api/admin/upload`, {
         method: "POST",
         body: formData,
-        credentials: "include",
-        headers,
+        headers: uploadHeaders,
       });
-
       const data = await uploadRes.json();
       clearInterval(progressInterval);
 
       if (uploadRes.status === 409) {
         setStatus("idle");
-        Alert.alert(
-          "Upload Skipped 🛡️",
-          data.message || "Attendees already exist.",
+        return Alert.alert(
+          "Upload Skipped",
+          data.message || "Attendees exist.",
         );
-        return;
       }
-
-      if (!uploadRes.ok || !data.fileName) {
+      if (!uploadRes.ok || !data.fileName)
         throw new Error(data.error || "Failed to process CSV.");
-      }
 
       setInsertedCount(data.insertedCount || 0);
 
-      // --- PHASE 2: STREAMED PDF DOWNLOAD ---
+      // Phase 2
       setStatus("downloading");
       setProgress(0);
-
       const downloadUrl = `${BASE_URL}/api/admin/tickets/download-temp/${data.fileName}`;
+      const headers = await getAuthHeaders();
 
       if (Platform.OS === "web") {
         const pdfRes = await fetch(downloadUrl, {
@@ -264,87 +230,54 @@ Mckenzie Friedman,mckenzie.friedman@example.com,20-84567-3,Southeast University,
         downloadLink.click();
         setPdfUri(linkSource);
       } else {
-        // Create the modern file reference safely
         const destFile = new File(Paths.document, data.fileName);
 
-        // Use createDownloadResumable to track exact byte progress
-        const downloadResumable = FileSystem.createDownloadResumable(
+        // 🔴 FIX 3: Using the explicit legacy API for downloads
+        const downloadResumable = FileSystemLegacy.createDownloadResumable(
           downloadUrl,
           destFile.uri,
           { headers },
-          (downloadProgress) => {
-            if (downloadProgress.totalBytesExpectedToWrite > 0) {
-              const currentProgress =
-                (downloadProgress.totalBytesWritten /
-                  downloadProgress.totalBytesExpectedToWrite) *
-                100;
-              setProgress(Math.round(currentProgress));
+          (ev) => {
+            if (ev.totalBytesExpectedToWrite > 0) {
+              setProgress(
+                Math.round(
+                  (ev.totalBytesWritten / ev.totalBytesExpectedToWrite) * 100,
+                ),
+              );
             }
           },
         );
-
         await downloadResumable.downloadAsync();
         setPdfUri(destFile.uri);
       }
 
-      setHasAttendees(true);
+      onAttendeesUpdated();
       setStatus("success");
     } catch (error: any) {
-      if (progressInterval) clearInterval(progressInterval);
+      clearInterval(progressInterval);
       setStatus("error");
       Alert.alert("Process Failed", error.message);
     }
   };
 
-  // =====================================================================
-  // 🖨️ SHARING & BACKUPS
-  // =====================================================================
   const sharePdf = async () => {
-    // 1. Prevent silent failures if the URI is missing
-    if (!pdfUri) {
-      Alert.alert(
-        "Error",
-        "The PDF file could not be located. Please try redownloading.",
-      );
-      return;
-    }
-
-    // 2. Web Fix: Actually open/download the file instead of a fake alert
+    if (!pdfUri) return Alert.alert("Error", "PDF file could not be located.");
     if (Platform.OS === "web") {
       const link = document.createElement("a");
       link.href = pdfUri;
       link.download = `Fest_Tickets_${Date.now()}.pdf`;
-      document.body.appendChild(link);
       link.click();
-      document.body.removeChild(link);
       return;
     }
-
-    // 3. Mobile Fix: Guarantee the file:// prefix and trigger the native share sheet
     try {
-      const isAvailable = await Sharing.isAvailableAsync();
-      if (isAvailable) {
-        // Expo Sharing strictly requires the file:// prefix to read local cache
-        const shareableUri = pdfUri.startsWith("file://")
-          ? pdfUri
-          : `file://${pdfUri}`;
-
-        await Sharing.shareAsync(shareableUri, {
-          mimeType: "application/pdf",
-          dialogTitle: "Print or Share Fest Tickets",
-          UTI: "com.adobe.pdf",
-        });
-      } else {
-        Alert.alert(
-          "Unavailable",
-          "Native sharing is not supported on this device.",
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(
+          pdfUri.startsWith("file://") ? pdfUri : `file://${pdfUri}`,
+          { mimeType: "application/pdf", UTI: "com.adobe.pdf" },
         );
       }
     } catch (error: any) {
-      Alert.alert(
-        "Share Error",
-        error.message || "Failed to open the share menu.",
-      );
+      Alert.alert("Share Error", error.message);
     }
   };
 
@@ -356,29 +289,24 @@ Mckenzie Friedman,mckenzie.friedman@example.com,20-84567-3,Southeast University,
       const filename = `All_Fest_Tickets_Backup_${Date.now()}.pdf`;
 
       if (Platform.OS === "web") {
-        const response = await fetch(endpoint, {
-          method: "GET",
-          credentials: "include",
-          headers,
-        });
-        if (!response.ok) throw new Error("Failed to generate tickets PDF.");
-        const blob = await response.blob();
+        const res = await fetch(endpoint, { method: "GET", headers });
+        if (!res.ok) throw new Error("Failed to generate PDF.");
+        const blob = await res.blob();
         const link = document.createElement("a");
         link.href = URL.createObjectURL(blob);
         link.download = filename;
         link.click();
       } else {
-        // Create modern file reference
         const destFile = new File(Paths.document, filename);
 
-        // Use standard FileSystem download pointing to the modern URI
-        await FileSystem.downloadAsync(endpoint, destFile.uri, { headers });
+        // 🔴 FIX 4: Legacy API integration
+        await FileSystemLegacy.downloadAsync(endpoint, destFile.uri, {
+          headers,
+        });
 
-        const isAvailable = await Sharing.isAvailableAsync();
-        if (isAvailable) {
+        if (await Sharing.isAvailableAsync()) {
           await Sharing.shareAsync(destFile.uri, {
             mimeType: "application/pdf",
-            dialogTitle: "Print or Share All Tickets",
             UTI: "com.adobe.pdf",
           });
         }
@@ -390,41 +318,14 @@ Mckenzie Friedman,mckenzie.friedman@example.com,20-84567-3,Southeast University,
     }
   };
 
-  // =====================================================================
-  // RENDER
-  // =====================================================================
   return (
-    <ScrollView
-      style={[styles.container, { backgroundColor: theme.background }]}
-    >
-      <View style={styles.header}>
-        <Text style={[styles.title, { color: theme.primary }]}>
-          Upload & Export
-        </Text>
-        <Text style={[styles.subtitle, { color: theme.textMuted }]}>
-          Streamline your festival operations by bulk importing attendee data
-          and generating ready-to-print tickets.
+    <View>
+      <View style={styles.sectionHeader}>
+        <Text style={[styles.sectionTitle, { color: theme.textMain }]}>
+          Data Import & Export
         </Text>
       </View>
 
-      <View style={[styles.card, { backgroundColor: theme.surface }]}>
-        <View style={styles.healthRow}>
-          <Text style={[styles.cardEyebrow, { color: theme.textMuted }]}>
-            SYSTEM HEALTH
-          </Text>
-          <View
-            style={[styles.healthDot, { backgroundColor: theme.success }]}
-          />
-        </View>
-        <Text style={[styles.healthValue, { color: theme.primary }]}>
-          99.8%
-        </Text>
-        <Text style={[styles.healthSubtitle, { color: theme.textMuted }]}>
-          Uptime Status
-        </Text>
-      </View>
-
-      {/* DYNAMIC PROGRESS BAR: Handles both Phase 1 (Upload) and Phase 2 (Download) */}
       {(status === "uploading" || status === "downloading") && (
         <View
           style={[
@@ -439,8 +340,8 @@ Mckenzie Friedman,mckenzie.friedman@example.com,20-84567-3,Southeast University,
           <View style={styles.progressHeader}>
             <Text style={[styles.progressTitle, { color: theme.primary }]}>
               {status === "uploading"
-                ? "Uploading CSV & Parsing Data..."
-                : "Downloading PDF Tickets..."}
+                ? "Uploading CSV Data..."
+                : "Downloading Tickets..."}
             </Text>
             <Text style={[styles.progressPercentage, { color: theme.primary }]}>
               {Math.round(progress)}%
@@ -462,48 +363,104 @@ Mckenzie Friedman,mckenzie.friedman@example.com,20-84567-3,Southeast University,
         </View>
       )}
 
-      <View
-        style={[
-          styles.guideCard,
-          { backgroundColor: `${theme.primary}05`, borderColor: theme.primary },
-        ]}
-      >
-        <View style={styles.guideHeader}>
-          <Feather name="info" size={20} color={theme.primary} />
-          <Text style={[styles.guideTitle, { color: theme.primary }]}>
-            CSV Preparation Guide
-          </Text>
+      {status === "success" && (
+        <View style={styles.successContainer}>
+          <View
+            style={[
+              styles.successCard,
+              {
+                backgroundColor: `${theme.success}10`,
+                borderColor: theme.success,
+              },
+            ]}
+          >
+            <Feather
+              name="check-circle"
+              size={24}
+              color={theme.success}
+              style={{ marginRight: 12 }}
+            />
+            <Text style={[styles.successText, { color: theme.success }]}>
+              Imported {insertedCount} attendees!
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={[styles.primaryButton, { backgroundColor: theme.primary }]}
+            onPress={sharePdf}
+          >
+            <Feather
+              name="printer"
+              size={20}
+              color="#FFF"
+              style={{ marginRight: 8 }}
+            />
+            <Text style={styles.primaryButtonText}>SHARE / PRINT TICKETS</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.secondaryButton, { borderColor: theme.primary }]}
+            onPress={() => {
+              setStatus("idle");
+              router.push("/directory");
+            }}
+          >
+            <Feather
+              name="eye"
+              size={20}
+              color={theme.primary}
+              style={{ marginRight: 8 }}
+            />
+            <Text
+              style={[styles.secondaryButtonText, { color: theme.primary }]}
+            >
+              View Directory
+            </Text>
+          </TouchableOpacity>
         </View>
-        <Text style={[styles.guideText, { color: theme.textMain }]}>
-          Ensure your CSV has exact column headers:{" "}
-          <Text style={styles.codeText}>name</Text>,{" "}
-          <Text style={styles.codeText}>email</Text>,{" "}
-          <Text style={styles.codeText}>studentId</Text>,{" "}
-          <Text style={styles.codeText}>university</Text>,{" "}
-          <Text style={styles.codeText}>role</Text>,{" "}
-          <Text style={styles.codeText}>category</Text>.
-        </Text>
-        <TouchableOpacity
-          style={styles.downloadRow}
-          onPress={downloadSampleCsv}
-        >
-          <Feather name="download" size={16} color={theme.primary} />
-          <Text style={[styles.downloadText, { color: theme.primary }]}>
-            Download Sample CSV
-          </Text>
-        </TouchableOpacity>
-      </View>
+      )}
 
       {status !== "success" &&
         status !== "uploading" &&
         status !== "downloading" && (
           <>
+            <View
+              style={[
+                styles.guideCard,
+                {
+                  backgroundColor: `${theme.primary}05`,
+                  borderColor: theme.primary,
+                },
+              ]}
+            >
+              <View style={styles.guideHeader}>
+                <Feather name="info" size={20} color={theme.primary} />
+                <Text style={[styles.guideTitle, { color: theme.primary }]}>
+                  CSV Format Guide
+                </Text>
+              </View>
+              <Text style={[styles.guideText, { color: theme.textMain }]}>
+                Columns: <Text style={styles.codeText}>name</Text>,{" "}
+                <Text style={styles.codeText}>email</Text>,{" "}
+                <Text style={styles.codeText}>studentId</Text>,{" "}
+                <Text style={styles.codeText}>university</Text>,{" "}
+                <Text style={styles.codeText}>role</Text>,{" "}
+                <Text style={styles.codeText}>category</Text>.
+              </Text>
+              <TouchableOpacity
+                style={styles.downloadRow}
+                onPress={downloadSampleCsv}
+              >
+                <Feather name="download" size={16} color={theme.primary} />
+                <Text style={[styles.downloadText, { color: theme.primary }]}>
+                  Download Sample CSV
+                </Text>
+              </TouchableOpacity>
+            </View>
+
             <TouchableOpacity
               style={[
                 styles.dropzone,
                 { borderColor: theme.border, backgroundColor: theme.surface },
               ]}
-              activeOpacity={0.7}
               onPress={pickDocument}
             >
               <View
@@ -529,7 +486,6 @@ Mckenzie Friedman,mckenzie.friedman@example.com,20-84567-3,Southeast University,
                   styles.secondaryButton,
                   { borderColor: theme.primary, marginBottom: 24 },
                 ]}
-                activeOpacity={0.8}
                 onPress={redownloadAllTickets}
                 disabled={isRedownloading}
               >
@@ -551,83 +507,24 @@ Mckenzie Friedman,mckenzie.friedman@example.com,20-84567-3,Southeast University,
                 >
                   {isRedownloading
                     ? "GENERATING PDF..."
-                    : "REDOWNLOAD ALL EXISTING TICKETS"}
+                    : "REDOWNLOAD TICKETS BACKUP"}
                 </Text>
               </TouchableOpacity>
             )}
           </>
         )}
-
-      {/* PHASE 3: SUCCESS UI */}
-      {status === "success" && (
-        <View style={styles.successContainer}>
-          <View
-            style={[
-              styles.successCard,
-              {
-                backgroundColor: `${theme.success}10`,
-                borderColor: theme.success,
-              },
-            ]}
-          >
-            <Feather
-              name="check-circle"
-              size={24}
-              color={theme.success}
-              style={{ marginRight: 12 }}
-            />
-            <Text style={[styles.successText, { color: theme.success }]}>
-              Successfully imported {insertedCount} attendees!
-            </Text>
-          </View>
-
-          <TouchableOpacity
-            style={[styles.primaryButton, { backgroundColor: theme.primary }]}
-            activeOpacity={0.8}
-            onPress={sharePdf}
-          >
-            <Feather
-              name="printer"
-              size={20}
-              color="#FFF"
-              style={{ marginRight: 8 }}
-            />
-            <Text style={styles.primaryButtonText}>SHARE / PRINT TICKETS</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.secondaryButton, { borderColor: theme.primary }]}
-            activeOpacity={0.8}
-            onPress={() => {
-              setStatus("idle");
-              router.push("/directory");
-            }}
-          >
-            <Feather
-              name="eye"
-              size={20}
-              color={theme.primary}
-              style={{ marginRight: 8 }}
-            />
-            <Text
-              style={[styles.secondaryButtonText, { color: theme.primary }]}
-            >
-              View Attendees
-            </Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      <View style={{ height: 40 }} />
-    </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingHorizontal: SIZES.padding, paddingTop: 24 },
-  header: { marginBottom: 24 },
-  title: { ...FONTS.header, fontSize: 28, marginBottom: 8 },
-  subtitle: { ...FONTS.body, lineHeight: 22 },
+  sectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  sectionTitle: { ...FONTS.header, fontSize: 20 },
   card: {
     padding: 20,
     borderRadius: SIZES.radius,
@@ -638,21 +535,6 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 2,
   },
-  cardEyebrow: {
-    ...FONTS.muted,
-    fontSize: 11,
-    fontWeight: "700",
-    letterSpacing: 1,
-  },
-  healthRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  healthDot: { width: 8, height: 8, borderRadius: 4 },
-  healthValue: { ...FONTS.header, fontSize: 32, marginBottom: 4 },
-  healthSubtitle: { ...FONTS.muted, fontSize: 14 },
   progressHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -705,7 +587,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   dropzoneTitle: { ...FONTS.header, fontSize: 20, marginBottom: 8 },
-  successContainer: { marginTop: 8 },
+  successContainer: { marginTop: 8, marginBottom: 24 },
   successCard: {
     flexDirection: "row",
     alignItems: "center",

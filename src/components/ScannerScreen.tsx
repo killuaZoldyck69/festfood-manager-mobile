@@ -14,12 +14,12 @@ import {
   View,
 } from "react-native";
 
-// 🔴 UPDATED: Added DEPLETED status
+// 🧹 CLEANED: Exact 1:1 match with backend API response statuses
 type ScanStatus =
   | "IDLE"
   | "PROCESSING"
   | "SUCCESS"
-  | "ALREADY_CLAIMED"
+  | "DUPLICATE"
   | "INVALID"
   | "DEPLETED";
 
@@ -35,13 +35,12 @@ interface ScannerScreenProps {
 
 const formatTime = (dateString: string | undefined) => {
   if (!dateString) return "Unknown Time";
-
   if (dateString.match(/AM|PM/i)) return dateString;
 
   const date = new Date(dateString);
-  if (isNaN(date.getTime())) return dateString;
-
-  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return isNaN(date.getTime())
+    ? dateString
+    : date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 };
 
 export default function ScannerScreen({ role }: ScannerScreenProps) {
@@ -81,8 +80,9 @@ export default function ScannerScreen({ role }: ScannerScreenProps) {
     );
   }
 
+  // 🧹 CLEANED: Removed all bloated error string matching.
+  // We now strictly trust the explicit status returned by the backend API.
   const handleBarcodeScanned = async ({
-    type,
     data,
   }: {
     type: string;
@@ -99,44 +99,33 @@ export default function ScannerScreen({ role }: ScannerScreenProps) {
 
       const responseData = await response.json();
 
-      if (response.ok) {
-        setScanData({
-          name: responseData.attendee?.name || "Unknown Attendee",
-          category: responseData.attendee?.category || "General",
-        });
-        setStatus("SUCCESS");
-      } else {
-        // 🔴 UPDATED: Smart Error Matching checks for DEPLETED
-        const errorMessage = (
-          responseData.status ||
-          responseData.error ||
-          responseData.message ||
-          ""
-        ).toUpperCase();
-
-        if (
-          errorMessage.includes("DEPLETED") ||
-          errorMessage.includes("NO FOOD")
-        ) {
-          setStatus("DEPLETED");
-        } else if (
-          errorMessage.includes("ALREADY") ||
-          errorMessage.includes("CLAIMED") ||
-          errorMessage.includes("DUPLICATE")
-        ) {
+      switch (responseData?.status) {
+        case "SUCCESS":
+          setScanData({
+            name: responseData.attendee?.name || "Unknown Attendee",
+            category: responseData.attendee?.category || "General",
+          });
+          setStatus("SUCCESS");
+          break;
+        case "DUPLICATE":
           setScanData({
             name: responseData.attendee?.name || "Unknown Attendee",
             claimedAt:
               responseData.attendee?.claimedAt || new Date().toISOString(),
           });
-          setStatus("ALREADY_CLAIMED");
-        } else {
+          setStatus("DUPLICATE");
+          break;
+        case "DEPLETED":
+          setStatus("DEPLETED");
+          break;
+        case "INVALID":
+        default:
           setStatus("INVALID");
-        }
+          break;
       }
     } catch (error) {
       console.error("Scan API Error:", error);
-      setStatus("INVALID");
+      setStatus("INVALID"); // Fallback for network errors/500s
     }
   };
 
@@ -247,7 +236,7 @@ export default function ScannerScreen({ role }: ScannerScreenProps) {
           </Pressable>
         )}
 
-        {status === "ALREADY_CLAIMED" && (
+        {status === "DUPLICATE" && (
           <Pressable
             style={[styles.outcomeContainer, { backgroundColor: "#EF4444" }]}
             onPress={resetScanner}
@@ -335,7 +324,6 @@ export default function ScannerScreen({ role }: ScannerScreenProps) {
           </Pressable>
         )}
 
-        {/* 🔴 NEW: The Out of Stock / Depleted Modal UI */}
         {status === "DEPLETED" && (
           <Pressable
             style={[styles.outcomeContainer, { backgroundColor: "#334155" }]}
@@ -388,9 +376,6 @@ export default function ScannerScreen({ role }: ScannerScreenProps) {
   );
 }
 
-// ==========================================
-// STYLES
-// ==========================================
 const styles = StyleSheet.create({
   container: { flex: 1 },
   centerContainer: {

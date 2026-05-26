@@ -50,23 +50,23 @@ export default function AdminLayout() {
       />
 
       <Tabs.Screen
-        name="upload"
-        options={{
-          headerShown: false,
-          tabBarLabel: "Upload",
-          tabBarIcon: ({ color, size }) => (
-            <Feather name="upload-cloud" size={size} color={color} />
-          ),
-        }}
-      />
-
-      <Tabs.Screen
         name="logs"
         options={{
           headerShown: false,
           tabBarLabel: "Logs",
           tabBarIcon: ({ color, size }) => (
             <Feather name="file-text" size={size} color={color} />
+          ),
+        }}
+      />
+
+      <Tabs.Screen
+        name="management"
+        options={{
+          headerShown: false,
+          tabBarLabel: "Manage",
+          tabBarIcon: ({ color, size }) => (
+            <Feather name="settings" size={size} color={color} />
           ),
         }}
       />
