@@ -10,6 +10,7 @@ import {
   Modal,
   Platform,
   SafeAreaView,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -20,6 +21,8 @@ import {
 interface Attendee {
   id: string;
   name: string;
+  email: string;
+  studentId: string;
   university: string;
   role: string;
   category: string;
@@ -42,12 +45,18 @@ interface MetaData {
 
 type FilterTab = "ALL" | "CLAIMED" | "PENDING";
 
+// 🔴 UPDATED: Enforced 12-hour format
 const formatTime = (isoString: string | null) => {
   if (!isoString) return "";
   const date = new Date(isoString);
-  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return date.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
 };
 
+// 🔴 UPDATED: Enforced 12-hour format
 const formatDateTime = (isoString: string | null) => {
   if (!isoString) return "Unknown Date";
   const date = new Date(isoString);
@@ -59,6 +68,7 @@ const formatDateTime = (isoString: string | null) => {
   const timePart = date.toLocaleTimeString([], {
     hour: "2-digit",
     minute: "2-digit",
+    hour12: true,
   });
   return `${datePart} at ${timePart}`;
 };
@@ -96,7 +106,6 @@ export default function AdminDirectoryScreen() {
     }, [searchQuery, activeTab]),
   );
 
-  // 🧹 CLEANED: Strict reliance on backend pagination and standardized JSON shape
   const fetchAttendees = async (
     pageNumber: number,
     currentSearch: string,
@@ -114,8 +123,10 @@ export default function AdminDirectoryScreen() {
 
       if (response.ok) {
         const data = await response.json();
-        setAttendees(data.attendees || []);
-        setMeta(data.meta || null);
+        // Wrapper-agnostic extraction just in case
+        const payload = data.data ? data.data : data;
+        setAttendees(payload.attendees || []);
+        setMeta(payload.meta || null);
       }
     } catch (error) {
       console.error("Failed to fetch directory:", error);
@@ -222,6 +233,14 @@ export default function AdminDirectoryScreen() {
               {item.name}
             </Text>
 
+            {/* 🔴 NEW: Contextual Search Trace Identifiers */}
+            <Text
+              style={[styles.traceText, { color: theme.textMuted }]}
+              numberOfLines={1}
+            >
+              ID: {item.studentId}
+            </Text>
+
             <View style={styles.listSubRow}>
               <Text
                 style={[styles.attendeeUniversity, { color: theme.textMuted }]}
@@ -297,47 +316,63 @@ export default function AdminDirectoryScreen() {
           />
           <TextInput
             style={[styles.searchInput, { color: theme.textMain }]}
-            placeholder="Search by Name, ID, or University..."
+            placeholder="Search Name, ID, or University..."
             placeholderTextColor={theme.textMuted}
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
         </View>
 
-        <View
-          style={[styles.tabsContainer, { backgroundColor: theme.surface }]}
-        >
-          {(["ALL", "CLAIMED", "PENDING"] as FilterTab[]).map((tab) => {
-            const isActive = activeTab === tab;
-            return (
-              <TouchableOpacity
-                key={tab}
-                style={[
-                  styles.tab,
-                  isActive && {
-                    backgroundColor: theme.background,
-                    shadowColor: "#000",
-                    elevation: 2,
-                    shadowOpacity: 0.1,
-                    shadowOffset: { width: 0, height: 1 },
-                  },
-                ]}
-                onPress={() => handleTabChange(tab)}
-              >
-                <Text
+        {/* 🔴 UPDATED: Semantic Tab Bar Pills */}
+        <View style={styles.tabsWrapper}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.tabsScrollContent}
+          >
+            {(
+              [
+                { id: "ALL", icon: "users", activeColor: theme.primary },
+                {
+                  id: "CLAIMED",
+                  icon: "check-circle",
+                  activeColor: theme.success,
+                },
+                { id: "PENDING", icon: "clock", activeColor: "#D97706" }, // Amber/Orange
+              ] as { id: FilterTab; icon: any; activeColor: string }[]
+            ).map((tab) => {
+              const isActive = activeTab === tab.id;
+              return (
+                <TouchableOpacity
+                  key={tab.id}
                   style={[
-                    styles.tabText,
-                    {
-                      color: isActive ? theme.primary : theme.textMuted,
-                      fontWeight: isActive ? "700" : "500",
-                    },
+                    styles.tab,
+                    { backgroundColor: theme.surface },
+                    isActive && { backgroundColor: `${tab.activeColor}15` },
                   ]}
+                  onPress={() => handleTabChange(tab.id)}
                 >
-                  {tab}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
+                  <Feather
+                    name={tab.icon}
+                    size={14}
+                    color={isActive ? tab.activeColor : theme.textMuted}
+                    style={{ marginRight: 6 }}
+                  />
+                  <Text
+                    style={[
+                      styles.tabText,
+                      {
+                        color: isActive ? tab.activeColor : theme.textMuted,
+                        fontWeight: isActive ? "800" : "600",
+                      },
+                    ]}
+                  >
+                    {tab.id}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
         </View>
 
         <FlatList
@@ -655,6 +690,24 @@ export default function AdminDirectoryScreen() {
                 <Text style={[styles.detailName, { color: theme.textMain }]}>
                   {selectedAttendee.name}
                 </Text>
+
+                {/* 🔴 NEW: Inject email and ID into the detailed modal */}
+                <Text
+                  style={[styles.traceText, { color: theme.textMuted }]}
+                  numberOfLines={1}
+                >
+                  ID: {selectedAttendee.studentId}
+                </Text>
+                <Text
+                  style={[
+                    styles.traceText,
+                    { color: theme.textMuted, marginBottom: 8 },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {selectedAttendee.email}
+                </Text>
+
                 <Text
                   style={[styles.detailUniversity, { color: theme.textMuted }]}
                 >
@@ -680,7 +733,7 @@ export default function AdminDirectoryScreen() {
                   <Text
                     style={[styles.modalIdText, { color: theme.textMuted }]}
                   >
-                    ID: #{selectedAttendee.id.substring(0, 8).toUpperCase()}
+                    Token: #{selectedAttendee.id.substring(0, 10).toUpperCase()}
                   </Text>
                 </View>
 
@@ -784,23 +837,23 @@ const styles = StyleSheet.create({
   },
   searchIcon: { marginRight: 12 },
   searchInput: { flex: 1, ...FONTS.body, fontSize: 16, height: "100%" },
-  tabsContainer: {
-    flexDirection: "row",
-    marginHorizontal: SIZES.padding,
-    marginTop: 16,
-    borderRadius: SIZES.radius,
-    padding: 4,
-  },
+
+  // 🔴 UPDATED: New tab styles mirroring the Logs layout
+  tabsWrapper: { marginTop: 12, marginBottom: 8 },
+  tabsScrollContent: { paddingHorizontal: SIZES.padding, paddingVertical: 4 },
   tab: {
-    flex: 1,
+    flexDirection: "row",
+    paddingHorizontal: 18,
     paddingVertical: 10,
     alignItems: "center",
     borderRadius: SIZES.radius - 4,
+    marginRight: 10,
   },
   tabText: { ...FONTS.body, fontSize: 13, letterSpacing: 0.5 },
+
   listContent: {
     paddingHorizontal: SIZES.padding,
-    paddingTop: 16,
+    paddingTop: 8,
     paddingBottom: 100,
   },
   listItem: {
@@ -824,8 +877,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginBottom: 4,
   },
+  traceText: { ...FONTS.body, fontSize: 13, fontWeight: "500", lineHeight: 17 },
   listSubRow: { flexDirection: "row", alignItems: "center", marginBottom: 6 },
-  attendeeUniversity: { ...FONTS.muted, fontSize: 13, flexShrink: 1 },
+  attendeeUniversity: { ...FONTS.muted, fontSize: 12, flexShrink: 1 },
   categoryBadge: {
     alignSelf: "flex-start",
     paddingHorizontal: 8,

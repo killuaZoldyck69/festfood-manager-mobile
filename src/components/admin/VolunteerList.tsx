@@ -18,11 +18,18 @@ import {
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
 
+// 🔴 UPDATED: Matched interface to the new backend grouping API
 interface Volunteer {
   id: string;
   name: string;
   email: string;
-  _count: { scanLogs: number };
+  createdAt: string;
+  stats: {
+    total: number;
+    success: number;
+    duplicate: number;
+    invalid: number;
+  };
 }
 
 export default function VolunteerList() {
@@ -31,11 +38,8 @@ export default function VolunteerList() {
   const [isLoading, setIsLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  // Modal & Form State
   const [modalVisible, setModalVisible] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", password: "" });
-
-  // 🔴 NEW: State to toggle password visibility
   const [showPassword, setShowPassword] = useState(false);
 
   const fetchWithAuth = async (endpoint: string, options: RequestInit = {}) => {
@@ -79,7 +83,7 @@ export default function VolunteerList() {
         body: JSON.stringify(form),
       });
       if (res.ok) {
-        closeModal(); // Reset form and modal
+        closeModal();
         fetchVolunteers();
       } else {
         const err = await res.json().catch(() => ({}));
@@ -121,7 +125,6 @@ export default function VolunteerList() {
     );
   };
 
-  // Helper to completely reset the modal state
   const closeModal = () => {
     setModalVisible(false);
     setForm({ name: "", email: "", password: "" });
@@ -171,17 +174,74 @@ export default function VolunteerList() {
               <Text style={[styles.volEmail, { color: theme.textMuted }]}>
                 {vol.email}
               </Text>
-              <View
-                style={[
-                  styles.badge,
-                  { backgroundColor: `${theme.primary}15` },
-                ]}
-              >
-                <Text style={[styles.badgeText, { color: theme.primary }]}>
-                  {vol._count.scanLogs} Scans
-                </Text>
+
+              {/* 🔴 UPDATED: Detailed Stats Row */}
+              <View style={styles.statsRow}>
+                <View
+                  style={[
+                    styles.statBadge,
+                    { backgroundColor: `${theme.success}15` },
+                  ]}
+                >
+                  <Feather
+                    name="check"
+                    size={12}
+                    color={theme.success}
+                    style={{ marginRight: 4 }}
+                  />
+                  <Text style={[styles.statText, { color: theme.success }]}>
+                    {vol.stats.success}
+                  </Text>
+                </View>
+
+                <View
+                  style={[styles.statBadge, { backgroundColor: "#FEF3C7" }]}
+                >
+                  <Feather
+                    name="copy"
+                    size={12}
+                    color="#D97706"
+                    style={{ marginRight: 4 }}
+                  />
+                  <Text style={[styles.statText, { color: "#D97706" }]}>
+                    {vol.stats.duplicate}
+                  </Text>
+                </View>
+
+                <View
+                  style={[
+                    styles.statBadge,
+                    { backgroundColor: `${theme.error}15` },
+                  ]}
+                >
+                  <Feather
+                    name="x"
+                    size={12}
+                    color={theme.error}
+                    style={{ marginRight: 4 }}
+                  />
+                  <Text style={[styles.statText, { color: theme.error }]}>
+                    {vol.stats.invalid}
+                  </Text>
+                </View>
+
+                <View
+                  style={[
+                    styles.statBadge,
+                    {
+                      backgroundColor: `${theme.textMuted}15`,
+                      paddingHorizontal: 8,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.statText, { color: theme.textMuted }]}>
+                    Total:{" "}
+                    <Text style={{ fontWeight: "800" }}>{vol.stats.total}</Text>
+                  </Text>
+                </View>
               </View>
             </View>
+
             <TouchableOpacity
               style={styles.deleteBtn}
               onPress={() => handleDeleteVolunteer(vol.id, vol.name)}
@@ -248,7 +308,6 @@ export default function VolunteerList() {
               onChangeText={(txt) => setForm({ ...form, email: txt })}
             />
 
-            {/* 🔴 UPDATED: Password Container with Eye Icon */}
             <View
               style={[
                 styles.passwordContainer,
@@ -262,7 +321,7 @@ export default function VolunteerList() {
                 style={[styles.passwordInput, { color: theme.textMain }]}
                 placeholder="Password"
                 placeholderTextColor={theme.textMuted}
-                secureTextEntry={!showPassword} // Toggles visibility based on state
+                secureTextEntry={!showPassword}
                 value={form.password}
                 onChangeText={(txt) => setForm({ ...form, password: txt })}
               />
@@ -336,14 +395,28 @@ const styles = StyleSheet.create({
   },
   volInfo: { flex: 1 },
   volName: { ...FONTS.body, fontWeight: "700", fontSize: 16, marginBottom: 4 },
-  volEmail: { ...FONTS.muted, fontSize: 13, marginBottom: 8 },
-  badge: {
-    alignSelf: "flex-start",
-    paddingHorizontal: 8,
+  volEmail: { ...FONTS.muted, fontSize: 13, marginBottom: 12 },
+
+  // 🔴 NEW STYLES for the stats row
+  statsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  statBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 6,
     paddingVertical: 4,
     borderRadius: 6,
   },
-  badgeText: { ...FONTS.body, fontSize: 11, fontWeight: "700" },
+  statText: {
+    ...FONTS.body,
+    fontSize: 11,
+    fontWeight: "600",
+  },
+
   deleteBtn: { padding: 8 },
   modalOverlay: {
     flex: 1,
@@ -373,7 +446,6 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     fontSize: 16,
   },
-  // 🔴 NEW STYLES for the password toggle layout
   passwordContainer: {
     flexDirection: "row",
     alignItems: "center",
