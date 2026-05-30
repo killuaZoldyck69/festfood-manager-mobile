@@ -11,40 +11,46 @@ import {
   View,
 } from "react-native";
 
-interface FilterProps {
+export type FilterTab =
+  | "ALL"
+  | "SUCCESS"
+  | "DUPLICATE"
+  | "INVALID"
+  | "MANUAL_OVERRIDE";
+
+interface LogFiltersProps {
   searchQuery: string;
   setSearchQuery: (val: string) => void;
-  activeTab: string;
-  setActiveTab: (val: any) => void;
+  activeTab: FilterTab;
+  setActiveTab: (val: FilterTab) => void;
   selectedCategory: string;
   setSelectedCategory: (val: string) => void;
-  selectedUniversity: string;
-  setSelectedUniversity: (val: string) => void;
-  filterOptions: { categories: any[]; universities: any[] };
+  selectedVolunteerEmail: string;
+  setSelectedVolunteerEmail: (val: string) => void;
+  filterOptions: { categories: any[]; volunteers: any[] };
   clearFilters: () => void;
 }
 
-export default function DirectoryFilters({
+export default function LogFilters({
   searchQuery,
   setSearchQuery,
   activeTab,
   setActiveTab,
   selectedCategory,
   setSelectedCategory,
-  selectedUniversity,
-  setSelectedUniversity,
+  selectedVolunteerEmail,
+  setSelectedVolunteerEmail,
   filterOptions,
   clearFilters,
-}: FilterProps) {
+}: LogFiltersProps) {
   const theme = useTheme();
 
-  // Local UI State (Does not trigger parent re-renders)
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [isUniDropdownOpen, setIsUniDropdownOpen] = useState(false);
+  const [isVolDropdownOpen, setIsVolDropdownOpen] = useState(false);
 
   const hasActiveFilters =
     selectedCategory !== "ALL" ||
-    selectedUniversity !== "ALL" ||
+    selectedVolunteerEmail !== "ALL" ||
     searchQuery.trim() !== "" ||
     activeTab !== "ALL";
 
@@ -61,11 +67,11 @@ export default function DirectoryFilters({
             name="search"
             size={18}
             color={theme.textMuted}
-            style={{ marginRight: 8 }}
+            style={styles.searchIcon}
           />
           <TextInput
             style={[styles.searchInput, { color: theme.textMain }]}
-            placeholder="Search Name, ID, or Email..."
+            placeholder="Search Name, Email, Student ID..."
             placeholderTextColor={theme.textMuted}
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -81,11 +87,12 @@ export default function DirectoryFilters({
             </TouchableOpacity>
           )}
         </View>
+
         <TouchableOpacity
           style={[styles.advancedToggleBtn, { backgroundColor: theme.surface }]}
           onPress={() => {
             setShowAdvanced(!showAdvanced);
-            setIsUniDropdownOpen(false);
+            setIsVolDropdownOpen(false);
           }}
         >
           <View>
@@ -150,7 +157,7 @@ export default function DirectoryFilters({
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.pillScroll}
+            contentContainerStyle={styles.categoryPillScroll}
           >
             {filterOptions.categories.map((cat) => {
               const isCatActive = selectedCategory === cat.name;
@@ -158,7 +165,7 @@ export default function DirectoryFilters({
                 <TouchableOpacity
                   key={cat.name}
                   style={[
-                    styles.filterPill,
+                    styles.categoryPill,
                     { backgroundColor: theme.background },
                     isCatActive && { backgroundColor: theme.primary },
                   ]}
@@ -166,7 +173,7 @@ export default function DirectoryFilters({
                 >
                   <Text
                     style={[
-                      styles.filterPillText,
+                      styles.categoryPillText,
                       { color: isCatActive ? "#FFF" : theme.textMuted },
                     ]}
                   >
@@ -185,7 +192,7 @@ export default function DirectoryFilters({
               { color: theme.textMain, marginTop: 16 },
             ]}
           >
-            Filter By University
+            Filter By Staff Member
           </Text>
           <TouchableOpacity
             style={[
@@ -193,32 +200,34 @@ export default function DirectoryFilters({
               { backgroundColor: theme.background, borderColor: theme.border },
             ]}
             activeOpacity={0.7}
-            onPress={() => setIsUniDropdownOpen(!isUniDropdownOpen)}
+            onPress={() => setIsVolDropdownOpen(!isVolDropdownOpen)}
           >
             <Text
               style={[
                 styles.dropdownTriggerText,
                 {
                   color:
-                    selectedUniversity === "ALL"
+                    selectedVolunteerEmail === "ALL"
                       ? theme.textMuted
                       : theme.textMain,
                 },
               ]}
               numberOfLines={1}
             >
-              {selectedUniversity === "ALL"
-                ? "All Universities"
-                : selectedUniversity}
+              {selectedVolunteerEmail === "ALL"
+                ? "All Volunteers"
+                : filterOptions.volunteers.find(
+                    (v) => v.email === selectedVolunteerEmail,
+                  )?.name || selectedVolunteerEmail}
             </Text>
             <Feather
-              name={isUniDropdownOpen ? "chevron-up" : "chevron-down"}
+              name={isVolDropdownOpen ? "chevron-up" : "chevron-down"}
               size={18}
               color={theme.textMuted}
             />
           </TouchableOpacity>
 
-          {isUniDropdownOpen && (
+          {isVolDropdownOpen && (
             <View
               style={[
                 styles.dropdownListContainer,
@@ -233,39 +242,41 @@ export default function DirectoryFilters({
                 nestedScrollEnabled
                 showsVerticalScrollIndicator
               >
-                {filterOptions.universities.map((uni, index) => {
-                  const isUniActive = selectedUniversity === uni.name;
+                {filterOptions.volunteers.map((vol, index) => {
+                  const isVolActive =
+                    selectedVolunteerEmail === (vol.email || "ALL");
                   const displayText =
-                    uni.name === "ALL"
-                      ? "All Universities"
-                      : `${index}. ${uni.name} (${uni.count})`;
+                    vol.name === "ALL"
+                      ? "All Volunteers"
+                      : `${index}. ${vol.name} (${vol.email}) - ${vol.count} scans`;
+
                   return (
                     <TouchableOpacity
-                      key={uni.name}
+                      key={vol.email || vol.name}
                       style={[
                         styles.dropdownItem,
                         { borderBottomColor: theme.border },
-                        isUniActive && {
+                        isVolActive && {
                           backgroundColor: `${theme.primary}10`,
                         },
                       ]}
                       onPress={() => {
-                        setSelectedUniversity(uni.name);
-                        setIsUniDropdownOpen(false);
+                        setSelectedVolunteerEmail(vol.email || "ALL");
+                        setIsVolDropdownOpen(false);
                       }}
                     >
                       <Text
                         style={[
                           styles.dropdownItemText,
                           {
-                            color: isUniActive ? theme.primary : theme.textMain,
-                            fontWeight: isUniActive ? "700" : "500",
+                            color: isVolActive ? theme.primary : theme.textMain,
+                            fontWeight: isVolActive ? "700" : "500",
                           },
                         ]}
                       >
                         {displayText}
                       </Text>
-                      {isUniActive && (
+                      {isVolActive && (
                         <Feather name="check" size={16} color={theme.primary} />
                       )}
                     </TouchableOpacity>
@@ -277,7 +288,6 @@ export default function DirectoryFilters({
         </View>
       )}
 
-      {/* TABS */}
       <View style={styles.tabsWrapper}>
         <ScrollView
           horizontal
@@ -285,9 +295,11 @@ export default function DirectoryFilters({
           contentContainerStyle={styles.tabsScrollContent}
         >
           {[
-            { id: "ALL", icon: "users", activeColor: theme.primary },
-            { id: "CLAIMED", icon: "check-circle", activeColor: theme.success },
-            { id: "PENDING", icon: "clock", activeColor: "#D97706" },
+            { id: "ALL", icon: "layers", activeColor: theme.primary },
+            { id: "SUCCESS", icon: "check-circle", activeColor: theme.success },
+            { id: "DUPLICATE", icon: "copy", activeColor: theme.error },
+            { id: "INVALID", icon: "alert-triangle", activeColor: "#D97706" },
+            { id: "MANUAL_OVERRIDE", icon: "edit-3", activeColor: "#8B5CF6" },
           ].map((tab) => {
             const isActive = activeTab === tab.id;
             return (
@@ -298,7 +310,7 @@ export default function DirectoryFilters({
                   { backgroundColor: theme.surface },
                   isActive && { backgroundColor: `${tab.activeColor}15` },
                 ]}
-                onPress={() => setActiveTab(tab.id)}
+                onPress={() => setActiveTab(tab.id as FilterTab)}
               >
                 <Feather
                   name={tab.icon as any}
@@ -315,7 +327,7 @@ export default function DirectoryFilters({
                     },
                   ]}
                 >
-                  {tab.id}
+                  {tab.id.replace("_", " ")}
                 </Text>
               </TouchableOpacity>
             );
@@ -327,11 +339,7 @@ export default function DirectoryFilters({
 }
 
 const styles = StyleSheet.create({
-  filterControlPanel: {
-    paddingHorizontal: SIZES.padding,
-    marginBottom: 8,
-    marginTop: 8,
-  },
+  filterControlPanel: { paddingHorizontal: SIZES.padding, marginBottom: 12 },
   searchRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   searchBarContainer: {
     flexDirection: "row",
@@ -341,6 +349,7 @@ const styles = StyleSheet.create({
     height: 48,
     paddingHorizontal: 12,
   },
+  searchIcon: { marginRight: 8 },
   searchInput: { flex: 1, ...FONTS.body, fontSize: 15, height: "100%" },
   advancedToggleBtn: {
     height: 48,
@@ -389,9 +398,9 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     textTransform: "uppercase",
   },
-  pillScroll: { gap: 8, paddingTop: 4 },
-  filterPill: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 },
-  filterPillText: { ...FONTS.body, fontSize: 12, fontWeight: "600" },
+  categoryPillScroll: { gap: 8, paddingTop: 4 },
+  categoryPill: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 },
+  categoryPillText: { ...FONTS.body, fontSize: 12, fontWeight: "600" },
   dropdownTrigger: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -422,8 +431,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   dropdownItemText: { ...FONTS.body, fontSize: 13 },
-  tabsWrapper: { marginBottom: 8 },
-  tabsScrollContent: { paddingHorizontal: SIZES.padding, paddingVertical: 4 },
+  tabsWrapper: { marginTop: 12 },
+  tabsScrollContent: { paddingVertical: 4 },
   tab: {
     flexDirection: "row",
     paddingHorizontal: 18,
