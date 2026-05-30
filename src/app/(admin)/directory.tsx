@@ -1,167 +1,138 @@
+import AttendeeCard from "@/components/admin/directory/AttendeeCard";
+import DirectoryFilters from "@/components/admin/directory/DirectoryFilters";
+import DirectoryModals from "@/components/admin/directory/DirectoryModals";
 import { FONTS, SIZES } from "@/constants/theme";
 import { useTheme } from "@/hooks/use-theme";
 import { apiClient } from "@/utils/apiClient";
 import { Feather } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
-  Modal,
   Platform,
   SafeAreaView,
-  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
 
-interface Attendee {
-  id: string;
-  name: string;
-  email: string;
-  studentId: string;
-  university: string;
-  role: string;
-  category: string;
-  qrToken: string;
-  foodClaimed: boolean;
-  claimedAt: string | null;
-  createdAt: string;
-  updatedAt: string;
-  scannerName?: string | null;
-  scannerRole?: string | null;
-}
-
-interface MetaData {
-  totalAttendees: number;
-  currentPage: number;
-  totalPages: number;
-  hasMore: boolean;
-  currentFilter?: string;
-}
-
-type FilterTab = "ALL" | "CLAIMED" | "PENDING";
-
-// 🔴 UPDATED: Enforced 12-hour format
-const formatTime = (isoString: string | null) => {
-  if (!isoString) return "";
-  const date = new Date(isoString);
-  return date.toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true,
-  });
-};
-
-// 🔴 UPDATED: Enforced 12-hour format
-const formatDateTime = (isoString: string | null) => {
-  if (!isoString) return "Unknown Date";
-  const date = new Date(isoString);
-  const datePart = date.toLocaleDateString([], {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-  const timePart = date.toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true,
-  });
-  return `${datePart} at ${timePart}`;
-};
-
 export default function AdminDirectoryScreen() {
   const theme = useTheme();
 
-  const [attendees, setAttendees] = useState<Attendee[]>([]);
-  const [meta, setMeta] = useState<MetaData | null>(null);
-
+  // --- DATA STATE ---
+  const [attendees, setAttendees] = useState<any[]>([]);
+  const [meta, setMeta] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  // --- FILTER STATE ---
+  const [filterOptions, setFilterOptions] = useState({
+    categories: [{ name: "ALL" }],
+    universities: [{ name: "ALL" }],
+  });
+  const [activeTab, setActiveTab] = useState("ALL");
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeTab, setActiveTab] = useState<FilterTab>("ALL");
+  const [selectedCategory, setSelectedCategory] = useState("ALL");
+  const [selectedUniversity, setSelectedUniversity] = useState("ALL");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
 
-  const [selectedAttendee, setSelectedAttendee] = useState<Attendee | null>(
-    null,
-  );
-  const [claimConfirmAttendee, setClaimConfirmAttendee] =
-    useState<Attendee | null>(null);
+  // --- MODAL STATE ---
+  const [selectedAttendee, setSelectedAttendee] = useState<any>(null);
+  const [claimConfirmAttendee, setClaimConfirmAttendee] = useState<any>(null);
+  const [errorModalInfo, setErrorModalInfo] = useState<any>(null);
 
-  const [errorModalInfo, setErrorModalInfo] = useState<{
-    title: string;
-    message: string;
-    type: "OUT_OF_STOCK" | "ERROR";
-  } | null>(null);
+  // 1. Initial Load: Fetch dynamic options
+  useEffect(() => {
+    const fetchDynamicFilters = async () => {
+      try {
+        const response = await apiClient("/admin/attendees/filters", {
+          method: "GET",
+        });
+        if (response.ok) {
+          // 🔴 FIX: Parse once, store in a variable
+          const data = await response.json();
+          const payload = data.data ? data.data : data;
 
-  useFocusEffect(
-    useCallback(() => {
-      setIsLoading(true);
-      const delayDebounceFn = setTimeout(() => {
-        fetchAttendees(1, searchQuery, activeTab);
-      }, 500);
+          setFilterOptions({
+            categories: [{ name: "ALL" }, ...(payload.categories || [])],
+            universities: [{ name: "ALL" }, ...(payload.universities || [])],
+          });
+        }
+      } catch (error) {
+        console.error("Failed to fetch filters", error);
+      }
+    };
+    fetchDynamicFilters();
+  }, []);
 
-      return () => clearTimeout(delayDebounceFn);
-    }, [searchQuery, activeTab]),
-  );
+  // 2. Debounce Search
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+      setAttendees([]);
+    }, 500);
+    return () => clearTimeout(handler);
+  }, [searchQuery]);
 
-  const fetchAttendees = async (
-    pageNumber: number,
-    currentSearch: string,
-    currentTab: FilterTab,
-  ) => {
+  // 3. API Query execution
+  const fetchAttendees = async (pageNumber: number) => {
     setIsLoading(true);
     try {
-      let url = `/admin/attendees?search=${encodeURIComponent(currentSearch)}&page=${pageNumber}&limit=25`;
-
-      if (currentTab !== "ALL") {
-        url += `&status=${currentTab}`;
-      }
+      let url = `/admin/attendees?page=${pageNumber}&limit=25`;
+      if (activeTab !== "ALL") url += `&status=${activeTab}`;
+      if (selectedCategory !== "ALL")
+        url += `&category=${encodeURIComponent(selectedCategory)}`;
+      if (selectedUniversity !== "ALL")
+        url += `&university=${encodeURIComponent(selectedUniversity)}`;
+      if (debouncedSearch.trim().length > 0)
+        url += `&search=${encodeURIComponent(debouncedSearch.trim())}`;
 
       const response = await apiClient(url, { method: "GET" });
-
       if (response.ok) {
+        // 🔴 FIX: Parse once, store in a variable
         const data = await response.json();
-        // Wrapper-agnostic extraction just in case
         const payload = data.data ? data.data : data;
+
         setAttendees(payload.attendees || []);
         setMeta(payload.meta || null);
       }
-    } catch (error) {
-      console.error("Failed to fetch directory:", error);
     } finally {
       setIsLoading(false);
     }
   };
+  useFocusEffect(
+    useCallback(() => {
+      fetchAttendees(1);
+    }, [activeTab, debouncedSearch, selectedCategory, selectedUniversity]),
+  );
 
-  const handleTabChange = (tab: FilterTab) => {
-    setIsLoading(true);
-    setActiveTab(tab);
+  const clearFilters = useCallback(() => {
     setAttendees([]);
-    setMeta(null);
-  };
+    setSearchQuery("");
+    setSelectedCategory("ALL");
+    setSelectedUniversity("ALL");
+    setActiveTab("ALL");
+  }, []);
 
+  // --- MANUAL CLAIM API ---
   const handleManualClaim = async () => {
     if (!claimConfirmAttendee) return;
-
     const attendeeId = claimConfirmAttendee.id;
     const previousAttendees = [...attendees];
-
     setClaimConfirmAttendee(null);
 
-    const now = new Date().toISOString();
     setAttendees((prev) =>
-      prev.map((attendee) =>
-        attendee.id === attendeeId
+      prev.map((a) =>
+        a.id === attendeeId
           ? {
-              ...attendee,
+              ...a,
               foodClaimed: true,
-              claimedAt: now,
+              claimedAt: new Date().toISOString(),
               scannerName: "Manual Override",
               scannerRole: "ADMIN",
             }
-          : attendee,
+          : a,
       ),
     );
 
@@ -170,120 +141,29 @@ export default function AdminDirectoryScreen() {
         method: "POST",
         body: JSON.stringify({ attendeeId }),
       });
-
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        const errMsg = (
-          errorData.message ||
-          errorData.error ||
-          ""
-        ).toUpperCase();
-
-        if (
-          errMsg.includes("NO FOOD") ||
-          errMsg.includes("INVENTORY") ||
-          errMsg.includes("DEPLETED")
-        ) {
+        const errMsg = (errorData.message || "").toUpperCase();
+        if (errMsg.includes("NO FOOD") || errMsg.includes("DEPLETED"))
           throw new Error("OUT_OF_STOCK");
-        }
-        throw new Error("Failed to process manual override.");
+        throw new Error("Failed");
       }
     } catch (error: any) {
       setAttendees(previousAttendees);
-
-      if (error.message === "OUT_OF_STOCK") {
+      if (error.message === "OUT_OF_STOCK")
         setErrorModalInfo({
           title: "Out of Stock",
           message:
-            "There is no food left in the inventory! Please increase the total available food from your Dashboard before claiming more tickets.",
+            "Inventory is completely depleted. Increase limits on the dashboard.",
           type: "OUT_OF_STOCK",
         });
-      } else {
+      else
         setErrorModalInfo({
           title: "Override Failed",
-          message:
-            "Could not mark attendee as claimed. Please check your connection and try again.",
+          message: "Could not mark as claimed. Check your connection.",
           type: "ERROR",
         });
-      }
     }
-  };
-
-  const renderAttendee = ({ item }: { item: Attendee }) => {
-    const isClaimed = item.foodClaimed;
-
-    return (
-      <TouchableOpacity
-        style={[styles.listItem, { borderBottomColor: theme.border }]}
-        activeOpacity={0.7}
-        onPress={() => setSelectedAttendee(item)}
-      >
-        <View style={styles.listLeft}>
-          <View
-            style={[
-              styles.statusDot,
-              { backgroundColor: isClaimed ? theme.success : theme.textMuted },
-            ]}
-          />
-          <View style={{ flex: 1, paddingRight: 12 }}>
-            <Text
-              style={[styles.attendeeName, { color: theme.textMain }]}
-              numberOfLines={1}
-            >
-              {item.name}
-            </Text>
-
-            {/* 🔴 NEW: Contextual Search Trace Identifiers */}
-            <Text
-              style={[styles.traceText, { color: theme.textMuted }]}
-              numberOfLines={1}
-            >
-              ID: {item.studentId}
-            </Text>
-
-            <View style={styles.listSubRow}>
-              <Text
-                style={[styles.attendeeUniversity, { color: theme.textMuted }]}
-                numberOfLines={1}
-              >
-                {item.university || "Unknown University"}
-              </Text>
-            </View>
-
-            <View
-              style={[
-                styles.categoryBadge,
-                { backgroundColor: `${theme.primary}15` },
-              ]}
-            >
-              <Text
-                style={[styles.categoryBadgeText, { color: theme.primary }]}
-              >
-                {item.category || "Participant"}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {isClaimed ? (
-          <Text style={[styles.timeText, { color: theme.textMuted }]}>
-            {formatTime(item.claimedAt)}
-          </Text>
-        ) : (
-          <TouchableOpacity
-            style={[
-              styles.manualClaimBtn,
-              { borderColor: theme.border, backgroundColor: theme.surface },
-            ]}
-            onPress={() => setClaimConfirmAttendee(item)}
-          >
-            <Text style={[styles.manualClaimText, { color: theme.primary }]}>
-              Manual Claim
-            </Text>
-          </TouchableOpacity>
-        )}
-      </TouchableOpacity>
-    );
   };
 
   return (
@@ -305,80 +185,39 @@ export default function AdminDirectoryScreen() {
       </View>
 
       <View style={[styles.container, { backgroundColor: theme.background }]}>
-        <View
-          style={[styles.searchContainer, { backgroundColor: theme.surface }]}
-        >
-          <Feather
-            name="search"
-            size={20}
-            color={theme.textMuted}
-            style={styles.searchIcon}
-          />
-          <TextInput
-            style={[styles.searchInput, { color: theme.textMain }]}
-            placeholder="Search Name, ID, or University..."
-            placeholderTextColor={theme.textMuted}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
-        </View>
-
-        {/* 🔴 UPDATED: Semantic Tab Bar Pills */}
-        <View style={styles.tabsWrapper}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.tabsScrollContent}
-          >
-            {(
-              [
-                { id: "ALL", icon: "users", activeColor: theme.primary },
-                {
-                  id: "CLAIMED",
-                  icon: "check-circle",
-                  activeColor: theme.success,
-                },
-                { id: "PENDING", icon: "clock", activeColor: "#D97706" }, // Amber/Orange
-              ] as { id: FilterTab; icon: any; activeColor: string }[]
-            ).map((tab) => {
-              const isActive = activeTab === tab.id;
-              return (
-                <TouchableOpacity
-                  key={tab.id}
-                  style={[
-                    styles.tab,
-                    { backgroundColor: theme.surface },
-                    isActive && { backgroundColor: `${tab.activeColor}15` },
-                  ]}
-                  onPress={() => handleTabChange(tab.id)}
-                >
-                  <Feather
-                    name={tab.icon}
-                    size={14}
-                    color={isActive ? tab.activeColor : theme.textMuted}
-                    style={{ marginRight: 6 }}
-                  />
-                  <Text
-                    style={[
-                      styles.tabText,
-                      {
-                        color: isActive ? tab.activeColor : theme.textMuted,
-                        fontWeight: isActive ? "800" : "600",
-                      },
-                    ]}
-                  >
-                    {tab.id}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-        </View>
+        {/* COMPONENT: Filter Controls */}
+        <DirectoryFilters
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+          activeTab={activeTab}
+          setActiveTab={(val) => {
+            setAttendees([]);
+            setActiveTab(val);
+          }}
+          selectedCategory={selectedCategory}
+          setSelectedCategory={(val) => {
+            setAttendees([]);
+            setSelectedCategory(val);
+          }}
+          selectedUniversity={selectedUniversity}
+          setSelectedUniversity={(val) => {
+            setAttendees([]);
+            setSelectedUniversity(val);
+          }}
+          filterOptions={filterOptions}
+          clearFilters={clearFilters}
+        />
 
         <FlatList
           data={attendees}
           keyExtractor={(item) => item.id}
-          renderItem={renderAttendee}
+          renderItem={({ item }) => (
+            <AttendeeCard
+              item={item}
+              onSelect={setSelectedAttendee}
+              onManualClaim={setClaimConfirmAttendee}
+            />
+          )}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
@@ -390,15 +229,17 @@ export default function AdminDirectoryScreen() {
                   style={{ marginTop: 60 }}
                 />
               ) : (
-                <Text
-                  style={{
-                    color: theme.textMuted,
-                    marginTop: 60,
-                    ...FONTS.body,
-                  }}
-                >
-                  No attendees found.
-                </Text>
+                <View style={{ alignItems: "center", marginTop: 60 }}>
+                  <Feather
+                    name="search"
+                    size={40}
+                    color={theme.textMuted}
+                    style={{ marginBottom: 16 }}
+                  />
+                  <Text style={{ color: theme.textMuted, ...FONTS.body }}>
+                    No attendees found matching filters.
+                  </Text>
+                </View>
               )}
             </View>
           }
@@ -408,16 +249,14 @@ export default function AdminDirectoryScreen() {
                 <TouchableOpacity
                   style={[
                     styles.pageBtn,
-                    meta.currentPage === 1 && styles.pageBtnDisabled,
+                    meta.currentPage === 1 && { opacity: 0.5 },
                     {
                       backgroundColor: theme.surface,
                       borderColor: theme.border,
                     },
                   ]}
                   disabled={meta.currentPage === 1 || isLoading}
-                  onPress={() =>
-                    fetchAttendees(meta.currentPage - 1, searchQuery, activeTab)
-                  }
+                  onPress={() => fetchAttendees(meta.currentPage - 1)}
                 >
                   <Feather
                     name="chevron-left"
@@ -441,24 +280,20 @@ export default function AdminDirectoryScreen() {
                     Prev
                   </Text>
                 </TouchableOpacity>
-
                 <Text style={[styles.pageIndicator, { color: theme.textMain }]}>
                   Page {meta.currentPage} of {meta.totalPages}
                 </Text>
-
                 <TouchableOpacity
                   style={[
                     styles.pageBtn,
-                    !meta.hasMore && styles.pageBtnDisabled,
+                    !meta.hasMore && { opacity: 0.5 },
                     {
                       backgroundColor: theme.surface,
                       borderColor: theme.border,
                     },
                   ]}
                   disabled={!meta.hasMore || isLoading}
-                  onPress={() =>
-                    fetchAttendees(meta.currentPage + 1, searchQuery, activeTab)
-                  }
+                  onPress={() => fetchAttendees(meta.currentPage + 1)}
                 >
                   <Text
                     style={[
@@ -483,332 +318,16 @@ export default function AdminDirectoryScreen() {
         />
       </View>
 
-      {/* Confirmation Modal */}
-      <Modal
-        animationType="fade"
-        transparent={true}
-        visible={!!claimConfirmAttendee}
-        onRequestClose={() => setClaimConfirmAttendee(null)}
-      >
-        <View style={styles.centerModalOverlay}>
-          <View
-            style={[
-              styles.confirmModalCard,
-              { backgroundColor: theme.background },
-            ]}
-          >
-            <View
-              style={[
-                styles.warningIconBg,
-                { backgroundColor: `${theme.primary}15` },
-              ]}
-            >
-              <Feather name="alert-circle" size={32} color={theme.primary} />
-            </View>
-            <Text style={[styles.confirmModalTitle, { color: theme.textMain }]}>
-              Manual Override
-            </Text>
-            <Text style={[styles.confirmModalText, { color: theme.textMuted }]}>
-              Are you sure you want to mark{" "}
-              <Text style={{ color: theme.textMain, fontWeight: "700" }}>
-                {claimConfirmAttendee?.name}
-              </Text>
-              's ticket as claimed?
-            </Text>
-            <View style={styles.confirmModalActions}>
-              <TouchableOpacity
-                style={[
-                  styles.confirmBtn,
-                  styles.cancelBtn,
-                  { borderColor: theme.border },
-                ]}
-                onPress={() => setClaimConfirmAttendee(null)}
-              >
-                <Text style={[styles.cancelBtnText, { color: theme.textMain }]}>
-                  Cancel
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.confirmBtn,
-                  styles.acceptBtn,
-                  { backgroundColor: theme.primary },
-                ]}
-                onPress={handleManualClaim}
-              >
-                <Text style={styles.acceptBtnText}>Confirm Claim</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Custom Error & Out of Stock Modal */}
-      <Modal
-        animationType="fade"
-        transparent={true}
-        visible={!!errorModalInfo}
-        onRequestClose={() => setErrorModalInfo(null)}
-      >
-        <View style={styles.centerModalOverlay}>
-          <View
-            style={[
-              styles.confirmModalCard,
-              { backgroundColor: theme.background },
-            ]}
-          >
-            <View
-              style={[
-                styles.warningIconBg,
-                {
-                  backgroundColor:
-                    errorModalInfo?.type === "OUT_OF_STOCK"
-                      ? "#334155"
-                      : `${theme.error}15`,
-                },
-              ]}
-            >
-              <Feather
-                name={
-                  errorModalInfo?.type === "OUT_OF_STOCK"
-                    ? "inbox"
-                    : "alert-triangle"
-                }
-                size={32}
-                color={
-                  errorModalInfo?.type === "OUT_OF_STOCK" ? "#FFF" : theme.error
-                }
-              />
-            </View>
-            <Text
-              style={[
-                styles.confirmModalTitle,
-                { color: theme.textMain, textAlign: "center" },
-              ]}
-            >
-              {errorModalInfo?.title}
-            </Text>
-            <Text
-              style={[
-                styles.confirmModalText,
-                { color: theme.textMuted, marginBottom: 32 },
-              ]}
-            >
-              {errorModalInfo?.message}
-            </Text>
-            <TouchableOpacity
-              style={[
-                styles.confirmBtn,
-                {
-                  backgroundColor:
-                    errorModalInfo?.type === "OUT_OF_STOCK"
-                      ? "#334155"
-                      : theme.error,
-                  width: "100%",
-                },
-              ]}
-              onPress={() => setErrorModalInfo(null)}
-            >
-              <Text style={styles.acceptBtnText}>Dismiss</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Attendee Details Modal */}
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={!!selectedAttendee}
-        onRequestClose={() => setSelectedAttendee(null)}
-      >
-        <View style={styles.modalOverlay}>
-          <TouchableOpacity
-            style={StyleSheet.absoluteFillObject}
-            activeOpacity={1}
-            onPress={() => setSelectedAttendee(null)}
-          />
-          <View
-            style={[styles.modalContent, { backgroundColor: theme.background }]}
-          >
-            <View style={styles.dragHandle} />
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: theme.textMain }]}>
-                Attendee Details
-              </Text>
-              <TouchableOpacity onPress={() => setSelectedAttendee(null)}>
-                <View
-                  style={[styles.closeBtn, { backgroundColor: theme.surface }]}
-                >
-                  <Feather name="x" size={20} color={theme.textMain} />
-                </View>
-              </TouchableOpacity>
-            </View>
-
-            {selectedAttendee && (
-              <>
-                <View
-                  style={[
-                    styles.statusBadge,
-                    {
-                      backgroundColor: selectedAttendee.foodClaimed
-                        ? `${theme.success}15`
-                        : `${theme.textMuted}15`,
-                      borderColor: selectedAttendee.foodClaimed
-                        ? theme.success
-                        : theme.textMuted,
-                    },
-                  ]}
-                >
-                  <Feather
-                    name={
-                      selectedAttendee.foodClaimed ? "check-circle" : "clock"
-                    }
-                    size={16}
-                    color={
-                      selectedAttendee.foodClaimed
-                        ? theme.success
-                        : theme.textMuted
-                    }
-                  />
-                  <Text
-                    style={[
-                      styles.statusBadgeText,
-                      {
-                        color: selectedAttendee.foodClaimed
-                          ? theme.success
-                          : theme.textMuted,
-                      },
-                    ]}
-                  >
-                    {selectedAttendee.foodClaimed
-                      ? "ALREADY CLAIMED"
-                      : "PENDING CLAIM"}
-                  </Text>
-                </View>
-
-                <Text style={[styles.detailName, { color: theme.textMain }]}>
-                  {selectedAttendee.name}
-                </Text>
-
-                {/* 🔴 NEW: Inject email and ID into the detailed modal */}
-                <Text
-                  style={[styles.traceText, { color: theme.textMuted }]}
-                  numberOfLines={1}
-                >
-                  ID: {selectedAttendee.studentId}
-                </Text>
-                <Text
-                  style={[
-                    styles.traceText,
-                    { color: theme.textMuted, marginBottom: 8 },
-                  ]}
-                  numberOfLines={1}
-                >
-                  {selectedAttendee.email}
-                </Text>
-
-                <Text
-                  style={[styles.detailUniversity, { color: theme.textMuted }]}
-                >
-                  {selectedAttendee.university || "Unknown University"}
-                </Text>
-
-                <View style={styles.modalMetaRow}>
-                  <View
-                    style={[
-                      styles.modalCategoryBadge,
-                      { backgroundColor: `${theme.primary}15` },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.modalCategoryText,
-                        { color: theme.primary },
-                      ]}
-                    >
-                      {selectedAttendee.category || "Participant"}
-                    </Text>
-                  </View>
-                  <Text
-                    style={[styles.modalIdText, { color: theme.textMuted }]}
-                  >
-                    Token: #{selectedAttendee.id.substring(0, 10).toUpperCase()}
-                  </Text>
-                </View>
-
-                <Text style={[styles.auditTitle, { color: theme.textMuted }]}>
-                  AUDIT TRAIL
-                </Text>
-                <View style={styles.auditContainer}>
-                  <View style={styles.auditNode}>
-                    <View style={styles.auditTimeline}>
-                      <View
-                        style={[
-                          styles.auditDot,
-                          { backgroundColor: `${theme.primary}50` },
-                        ]}
-                      />
-                      <View
-                        style={[
-                          styles.auditLine,
-                          { backgroundColor: `${theme.primary}20` },
-                        ]}
-                      />
-                    </View>
-                    <View style={styles.auditDetails}>
-                      <Text
-                        style={[styles.auditTime, { color: theme.textMain }]}
-                      >
-                        {formatDateTime(selectedAttendee.createdAt)}
-                      </Text>
-                      <Text
-                        style={[styles.auditDesc, { color: theme.textMuted }]}
-                      >
-                        Registered in System
-                      </Text>
-                    </View>
-                  </View>
-
-                  {selectedAttendee.foodClaimed && (
-                    <View style={styles.auditNode}>
-                      <View style={styles.auditTimeline}>
-                        <View
-                          style={[
-                            styles.auditDot,
-                            { backgroundColor: theme.primary },
-                          ]}
-                        />
-                      </View>
-                      <View style={styles.auditDetails}>
-                        <Text
-                          style={[styles.auditTime, { color: theme.textMain }]}
-                        >
-                          {formatDateTime(selectedAttendee.claimedAt)}
-                        </Text>
-                        <Text
-                          style={[styles.auditDesc, { color: theme.textMuted }]}
-                        >
-                          Scanned by{" "}
-                          {selectedAttendee.scannerRole === "ADMIN"
-                            ? "Admin"
-                            : "Volunteer"}
-                          :{" "}
-                          <Text
-                            style={{ color: theme.primary, fontWeight: "600" }}
-                          >
-                            {selectedAttendee.scannerName || "System"}
-                          </Text>
-                        </Text>
-                      </View>
-                    </View>
-                  )}
-                </View>
-              </>
-            )}
-          </View>
-        </View>
-      </Modal>
+      {/* COMPONENT: All Modals */}
+      <DirectoryModals
+        selectedAttendee={selectedAttendee}
+        setSelectedAttendee={setSelectedAttendee}
+        claimConfirmAttendee={claimConfirmAttendee}
+        setClaimConfirmAttendee={setClaimConfirmAttendee}
+        errorModalInfo={errorModalInfo}
+        setErrorModalInfo={setErrorModalInfo}
+        handleManualClaim={handleManualClaim}
+      />
     </SafeAreaView>
   );
 }
@@ -826,80 +345,11 @@ const styles = StyleSheet.create({
   },
   headerTitle: { ...FONTS.header, fontSize: 28 },
   totalLogs: { ...FONTS.body, fontWeight: "600" },
-  searchContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginHorizontal: SIZES.padding,
-    marginTop: 8,
-    borderRadius: SIZES.radius,
-    paddingHorizontal: 16,
-    height: 50,
-  },
-  searchIcon: { marginRight: 12 },
-  searchInput: { flex: 1, ...FONTS.body, fontSize: 16, height: "100%" },
-
-  // 🔴 UPDATED: New tab styles mirroring the Logs layout
-  tabsWrapper: { marginTop: 12, marginBottom: 8 },
-  tabsScrollContent: { paddingHorizontal: SIZES.padding, paddingVertical: 4 },
-  tab: {
-    flexDirection: "row",
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    alignItems: "center",
-    borderRadius: SIZES.radius - 4,
-    marginRight: 10,
-  },
-  tabText: { ...FONTS.body, fontSize: 13, letterSpacing: 0.5 },
-
   listContent: {
     paddingHorizontal: SIZES.padding,
     paddingTop: 8,
     paddingBottom: 100,
   },
-  listItem: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-  },
-  listLeft: { flexDirection: "row", alignItems: "flex-start", flex: 1 },
-  statusDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    marginRight: 16,
-    marginTop: 6,
-  },
-  attendeeName: {
-    ...FONTS.body,
-    fontWeight: "700",
-    fontSize: 16,
-    marginBottom: 4,
-  },
-  traceText: { ...FONTS.body, fontSize: 13, fontWeight: "500", lineHeight: 17 },
-  listSubRow: { flexDirection: "row", alignItems: "center", marginBottom: 6 },
-  attendeeUniversity: { ...FONTS.muted, fontSize: 12, flexShrink: 1 },
-  categoryBadge: {
-    alignSelf: "flex-start",
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  categoryBadgeText: {
-    ...FONTS.body,
-    fontSize: 10,
-    fontWeight: "800",
-    textTransform: "uppercase",
-  },
-  timeText: { ...FONTS.muted, fontSize: 13, fontWeight: "600" },
-  manualClaimBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  manualClaimText: { ...FONTS.body, fontSize: 12, fontWeight: "700" },
   paginationWrapper: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -917,159 +367,6 @@ const styles = StyleSheet.create({
     borderRadius: SIZES.radius,
     borderWidth: 1,
   },
-  pageBtnDisabled: { opacity: 0.5 },
   pageBtnText: { ...FONTS.body, fontWeight: "700", fontSize: 14 },
   pageIndicator: { ...FONTS.body, fontWeight: "600", fontSize: 14 },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.4)",
-    justifyContent: "flex-end",
-  },
-  modalContent: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: SIZES.padding,
-    paddingBottom: Platform.OS === "ios" ? 40 : 24,
-    minHeight: "55%",
-  },
-  dragHandle: {
-    width: 40,
-    height: 4,
-    backgroundColor: "#E2E8F0",
-    borderRadius: 2,
-    alignSelf: "center",
-    marginBottom: 24,
-  },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 20,
-  },
-  modalTitle: { ...FONTS.header, fontSize: 20 },
-  closeBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  statusBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    alignSelf: "flex-start",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    borderWidth: 1,
-    marginBottom: 20,
-  },
-  statusBadgeText: {
-    ...FONTS.body,
-    fontWeight: "700",
-    fontSize: 12,
-    marginLeft: 6,
-    letterSpacing: 0.5,
-  },
-  detailName: { ...FONTS.header, fontSize: 28, marginBottom: 6 },
-  detailUniversity: {
-    ...FONTS.body,
-    fontSize: 16,
-    marginBottom: 16,
-    lineHeight: 22,
-  },
-  modalMetaRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 32,
-  },
-  modalCategoryBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
-    marginRight: 12,
-  },
-  modalCategoryText: {
-    ...FONTS.body,
-    fontSize: 12,
-    fontWeight: "800",
-    textTransform: "uppercase",
-  },
-  modalIdText: {
-    ...FONTS.body,
-    fontSize: 13,
-    fontWeight: "600",
-    fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
-  },
-  auditTitle: {
-    ...FONTS.muted,
-    fontSize: 12,
-    fontWeight: "800",
-    letterSpacing: 1,
-    marginBottom: 16,
-  },
-  auditContainer: { marginLeft: 8 },
-  auditNode: { flexDirection: "row", marginBottom: 4 },
-  auditTimeline: { alignItems: "center", width: 20, marginRight: 16 },
-  auditDot: { width: 10, height: 10, borderRadius: 5, marginTop: 4 },
-  auditLine: { width: 2, flex: 1, marginVertical: 4 },
-  auditDetails: { flex: 1, paddingBottom: 24 },
-  auditTime: {
-    ...FONTS.body,
-    fontSize: 15,
-    fontWeight: "600",
-    marginBottom: 4,
-  },
-  auditDesc: { ...FONTS.body, fontSize: 14, lineHeight: 20 },
-  centerModalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: SIZES.padding,
-  },
-  confirmModalCard: {
-    width: "100%",
-    padding: 24,
-    borderRadius: 24,
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 10,
-  },
-  warningIconBg: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  confirmModalTitle: { ...FONTS.header, fontSize: 22, marginBottom: 8 },
-  confirmModalText: {
-    ...FONTS.body,
-    fontSize: 15,
-    textAlign: "center",
-    lineHeight: 22,
-    marginBottom: 24,
-  },
-  confirmModalActions: { flexDirection: "row", width: "100%", gap: 12 },
-  confirmBtn: {
-    flex: 1,
-    height: 50,
-    borderRadius: SIZES.radius,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  cancelBtn: { borderWidth: 1 },
-  acceptBtn: {},
-  cancelBtnText: { ...FONTS.body, fontWeight: "600", fontSize: 15 },
-  acceptBtnText: {
-    color: "#FFF",
-    ...FONTS.body,
-    fontWeight: "700",
-    fontSize: 15,
-  },
 });
