@@ -50,26 +50,37 @@ export default function AdminLogsScreen() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
 
   // 1. Initial Load: Fetch dynamic options
-  useEffect(() => {
-    const fetchDynamicFilters = async () => {
-      try {
-        const response = await apiClient("/admin/logs/filters", {
-          method: "GET",
-        });
-        if (response.ok) {
-          const data = await response.json();
-          const payload = data.data ? data.data : data;
-          setFilterOptions({
-            categories: [{ name: "ALL" }, ...(payload.categories || [])],
-            volunteers: [{ name: "ALL" }, ...(payload.volunteers || [])],
-          });
+  useFocusEffect(
+    useCallback(() => {
+      const fetchDynamicFilters = async () => {
+        try {
+          // 🔴 FIX 1: Cache-Busting! Appends timestamp and strict headers to bypass aggressive OS GET caching
+          const response = await apiClient(
+            `/admin/logs/filters?_t=${Date.now()}`,
+            {
+              method: "GET",
+              headers: {
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                Pragma: "no-cache",
+                Expires: "0",
+              },
+            },
+          );
+          if (response.ok) {
+            const data = await response.json();
+            const payload = data.data ? data.data : data;
+            setFilterOptions({
+              categories: [{ name: "ALL" }, ...(payload.categories || [])],
+              volunteers: [{ name: "ALL" }, ...(payload.volunteers || [])],
+            });
+          }
+        } catch (error) {
+          console.error("Failed to fetch log filters:", error);
         }
-      } catch (error) {
-        console.error("Failed to fetch log filters:", error);
-      }
-    };
-    fetchDynamicFilters();
-  }, []);
+      };
+      fetchDynamicFilters();
+    }, []),
+  );
 
   // 2. Debounce Search
   useEffect(() => {
@@ -101,7 +112,6 @@ export default function AdminLogsScreen() {
         let finalLogs = payload.logs || [];
         let finalMeta = payload.meta || null;
 
-        // Auto-slicing fallback for backend pagination mismatch
         if (
           finalLogs.length > 10 &&
           (!finalMeta || finalMeta.totalPages === 1)
@@ -159,18 +169,27 @@ export default function AdminLogsScreen() {
         setSearchQuery={setSearchQuery}
         activeTab={activeTab}
         setActiveTab={(val) => {
-          setLogs([]);
-          setActiveTab(val);
+          // 🔴 FIX 2: Guard Clause prevents the list wiping out if already selected
+          if (val !== activeTab) {
+            setLogs([]);
+            setActiveTab(val);
+          }
         }}
         selectedCategory={selectedCategory}
         setSelectedCategory={(val) => {
-          setLogs([]);
-          setSelectedCategory(val);
+          // 🔴 FIX 2: Guard Clause
+          if (val !== selectedCategory) {
+            setLogs([]);
+            setSelectedCategory(val);
+          }
         }}
         selectedVolunteerEmail={selectedVolunteerEmail}
         setSelectedVolunteerEmail={(val) => {
-          setLogs([]);
-          setSelectedVolunteerEmail(val);
+          // 🔴 FIX 2: Guard Clause
+          if (val !== selectedVolunteerEmail) {
+            setLogs([]);
+            setSelectedVolunteerEmail(val);
+          }
         }}
         filterOptions={filterOptions}
         clearFilters={clearFilters}

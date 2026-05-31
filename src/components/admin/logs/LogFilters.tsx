@@ -169,7 +169,10 @@ export default function LogFilters({
                     { backgroundColor: theme.background },
                     isCatActive && { backgroundColor: theme.primary },
                   ]}
-                  onPress={() => setSelectedCategory(cat.name)}
+                  onPress={() => {
+                    // 🔴 FIX 2: Internal Guard Clause
+                    if (!isCatActive) setSelectedCategory(cat.name);
+                  }}
                 >
                   <Text
                     style={[
@@ -261,7 +264,10 @@ export default function LogFilters({
                         },
                       ]}
                       onPress={() => {
-                        setSelectedVolunteerEmail(vol.email || "ALL");
+                        // 🔴 FIX 2: Internal Guard Clause
+                        if (!isVolActive) {
+                          setSelectedVolunteerEmail(vol.email || "ALL");
+                        }
                         setIsVolDropdownOpen(false);
                       }}
                     >
@@ -310,7 +316,10 @@ export default function LogFilters({
                   { backgroundColor: theme.surface },
                   isActive && { backgroundColor: `${tab.activeColor}15` },
                 ]}
-                onPress={() => setActiveTab(tab.id as FilterTab)}
+                onPress={() => {
+                  // 🔴 FIX 2: Internal Guard Clause
+                  if (!isActive) setActiveTab(tab.id as FilterTab);
+                }}
               >
                 <Feather
                   name={tab.icon as any}

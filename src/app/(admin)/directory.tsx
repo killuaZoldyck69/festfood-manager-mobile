@@ -42,29 +42,31 @@ export default function AdminDirectoryScreen() {
   const [claimConfirmAttendee, setClaimConfirmAttendee] = useState<any>(null);
   const [errorModalInfo, setErrorModalInfo] = useState<any>(null);
 
-  // 1. Initial Load: Fetch dynamic options
-  useEffect(() => {
-    const fetchDynamicFilters = async () => {
-      try {
-        const response = await apiClient("/admin/attendees/filters", {
-          method: "GET",
-        });
-        if (response.ok) {
-          // 🔴 FIX: Parse once, store in a variable
-          const data = await response.json();
-          const payload = data.data ? data.data : data;
-
-          setFilterOptions({
-            categories: [{ name: "ALL" }, ...(payload.categories || [])],
-            universities: [{ name: "ALL" }, ...(payload.universities || [])],
+  // 🔴 FIX 1: Changed from useEffect to useFocusEffect so dynamic filters
+  // refresh automatically when navigating back from the Admin Center/Import screen!
+  useFocusEffect(
+    useCallback(() => {
+      const fetchDynamicFilters = async () => {
+        try {
+          const response = await apiClient("/admin/attendees/filters", {
+            method: "GET",
           });
+          if (response.ok) {
+            const data = await response.json();
+            const payload = data.data ? data.data : data;
+
+            setFilterOptions({
+              categories: [{ name: "ALL" }, ...(payload.categories || [])],
+              universities: [{ name: "ALL" }, ...(payload.universities || [])],
+            });
+          }
+        } catch (error) {
+          console.error("Failed to fetch filters", error);
         }
-      } catch (error) {
-        console.error("Failed to fetch filters", error);
-      }
-    };
-    fetchDynamicFilters();
-  }, []);
+      };
+      fetchDynamicFilters();
+    }, []),
+  );
 
   // 2. Debounce Search
   useEffect(() => {
@@ -90,7 +92,6 @@ export default function AdminDirectoryScreen() {
 
       const response = await apiClient(url, { method: "GET" });
       if (response.ok) {
-        // 🔴 FIX: Parse once, store in a variable
         const data = await response.json();
         const payload = data.data ? data.data : data;
 
@@ -191,18 +192,27 @@ export default function AdminDirectoryScreen() {
           setSearchQuery={setSearchQuery}
           activeTab={activeTab}
           setActiveTab={(val) => {
-            setAttendees([]);
-            setActiveTab(val);
+            // 🔴 FIX 2: Guard clauses added to all setter functions
+            if (val !== activeTab) {
+              setAttendees([]);
+              setActiveTab(val);
+            }
           }}
           selectedCategory={selectedCategory}
           setSelectedCategory={(val) => {
-            setAttendees([]);
-            setSelectedCategory(val);
+            // 🔴 FIX 2: Guard clauses added to all setter functions
+            if (val !== selectedCategory) {
+              setAttendees([]);
+              setSelectedCategory(val);
+            }
           }}
           selectedUniversity={selectedUniversity}
           setSelectedUniversity={(val) => {
-            setAttendees([]);
-            setSelectedUniversity(val);
+            // 🔴 FIX 2: Guard clauses added to all setter functions
+            if (val !== selectedUniversity) {
+              setAttendees([]);
+              setSelectedUniversity(val);
+            }
           }}
           filterOptions={filterOptions}
           clearFilters={clearFilters}

@@ -48,57 +48,57 @@ export default function DataImportExport({
   };
 
   const downloadSampleCsv = async () => {
-    const csvContent = `name,email,studentId,university,role,category
-Kyle Evans,kyle.evans@gmail.com,19-31661-3,Military Institute of Science and Technology,PARTICIPANT,Programming Contest
-Nicholas Welch,nicholas.welch@gmail.com,212-156-616,North South University,PARTICIPANT,Project Showcase
-Adam Allen,adam.allen@yahoo.com,201-178-126,Shanto-Mariam University of Creative Technology,PARTICIPANT,Hackathon
-Nathan Harrell,nathan.harrell@gmail.com,214-179-116,North South University,PARTICIPANT,General
-David Bradley,david.bradley@yahoo.com,216-167-107,United International University,PARTICIPANT,Hackathon
-Susan Lewis,susan.lewis@gmail.com,19-15133-2,Bangladesh University of Engineering and Technology,PARTICIPANT,Gaming
-Melissa Young,melissa.young@gmail.com,19-93357-3,Ahsanullah University of Science and Technology,PARTICIPANT,Gaming
-Stacy Anderson,stacy.anderson@yahoo.com,22-93963-3,Green University of Bangladesh,PARTICIPANT,Programming Contest
-David Jennings,david.jennings@gmail.com,222-121-140,Jahangirnagar University,PARTICIPANT,Gaming
-Matthew Smith,matthew.smith@example.com,19-80613-1,"Independent University, Bangladesh",PARTICIPANT,Gaming
-Matthew Olson,matthew.olson@gmail.com,214-147-412,Jahangirnagar University,PARTICIPANT,Project Showcase
-Diana Smith,diana.smith@student.edu.bd,229-175-951,Bangladesh University of Engineering and Technology,PARTICIPANT,Robotics
-Christopher Wallace,christopher.wallace@student.edu.bd,225-147-487,Southeast University,PARTICIPANT,Robotics
-Anthony Flores,anthony.flores@gmail.com,18-87760-1,United International University,PARTICIPANT,Gaming
-Jennifer Rodriguez,jennifer.rodriguez@student.edu.bd,223-130-775,University of Liberal Arts Bangladesh,PARTICIPANT,Datathon
-Cynthia Lang,cynthia.lang@student.edu.bd,22-24317-2,Green University of Bangladesh,PARTICIPANT,General
-Christina Marshall,christina.marshall@yahoo.com,22-81675-3,Chittagong University of Engineering & Technology,PARTICIPANT,General
-Devin Coleman,devin.coleman@example.com,20-12398-2,BRAC University,PARTICIPANT,General
-Daniel Jones,daniel.jones@example.com,19-48920-3,Bangladesh University of Engineering and Technology,PARTICIPANT,Hackathon
-Matthew Cobb,matthew.cobb@student.edu.bd,212-184-332,Green University of Bangladesh,PARTICIPANT,General
-Kaitlyn Smith,kaitlyn.smith@yahoo.com,226-152-601,Shahjalal University of Science and Technology,PARTICIPANT,General
-Dawn Wade,dawn.wade@example.com,203-149-916,Chittagong University of Engineering & Technology,PARTICIPANT,Project Showcase
-Zachary Gomez,zachary.gomez@student.edu.bd,218-198-247,United International University,PARTICIPANT,Programming Contest
-Jacqueline Wilson,jacqueline.wilson@example.com,227-154-620,Shahjalal University of Science and Technology,PARTICIPANT,Robotics
-William Washington,william.washington@yahoo.com,209-128-625,East West University,PARTICIPANT,General
-Dr. Joseph Jimenez,dr..joseph.jimenez@yahoo.com,200-154-669,Daffodil International University,PARTICIPANT,Gaming
-Amy White,amy.white@student.edu.bd,205-147-036,Jahangirnagar University,PARTICIPANT,Hackathon
-Joseph Hamilton,joseph.hamilton@gmail.com,214-120-974,University of Liberal Arts Bangladesh,PARTICIPANT,General
-Jacqueline Cox,jacqueline.cox@yahoo.com,20-26085-3,Ahsanullah University of Science and Technology,PARTICIPANT,Hackathon
-Amber Gardner,amber.gardner@gmail.com,19-60950-1,Chittagong University of Engineering & Technology,PARTICIPANT,Robotics
-Christine Fields,christine.fields@gmail.com,24-32520-1,BRAC University,PARTICIPANT,Robotics
-Kayla Rasmussen,kayla.rasmussen@example.com,22-48227-3,Jahangirnagar University,PARTICIPANT,Project Showcase
-Vanessa Rogers,vanessa.rogers@gmail.com,22-18787-1,University of Dhaka,PARTICIPANT,General
-Steven Sanchez,steven.sanchez@yahoo.com,202-163-681,Daffodil International University,PARTICIPANT,Programming Contest
-Jack Sloan,jack.sloan@yahoo.com,22-64927-2,Khulna University of Engineering & Technology,PARTICIPANT,General
-Brendan Boyd,brendan.boyd@gmail.com,219-122-832,Chittagong University of Engineering & Technology,PARTICIPANT,Project Showcase
-Margaret James,margaret.james@student.edu.bd,22-41591-2,North South University,PARTICIPANT,Gaming
-Gary Douglas,gary.douglas@gmail.com,228-145-393,University of Dhaka,PARTICIPANT,Hackathon
-Jason Ferguson,jason.ferguson@yahoo.com,23-10462-3,Jahangirnagar University,PARTICIPANT,Datathon
-Kayla Johnston,kayla.johnston@example.com,19-56157-3,Chittagong University of Engineering & Technology,PARTICIPANT,Datathon
-Misty Boyd,misty.boyd@example.com,21-82190-1,Daffodil International University,PARTICIPANT,Project Showcase
-Ryan Obrien,ryan.obrien@gmail.com,19-68546-1,Ahsanullah University of Science and Technology,PARTICIPANT,Datathon
-Todd Russell,todd.russell@example.com,205-162-636,"Independent University, Bangladesh",PARTICIPANT,Programming Contest
-Paul Johnson,paul.johnson@gmail.com,228-157-288,East West University,PARTICIPANT,General
-Kyle Wise,kyle.wise@student.edu.bd,212-156-488,Daffodil International University,PARTICIPANT,Hackathon
-Julie James,julie.james@yahoo.com,206-194-169,Shanto-Mariam University of Creative Technology,PARTICIPANT,Project Showcase
-Charles Baker,charles.baker@gmail.com,21-11878-2,Shahjalal University of Science and Technology,PARTICIPANT,General
-Erik Solomon,erik.solomon@yahoo.com,24-23521-1,Shanto-Mariam University of Creative Technology,PARTICIPANT,Robotics
-Richard Fowler,richard.fowler@yahoo.com,221-124-688,United International University,PARTICIPANT,Programming Contest
-Mckenzie Friedman,mckenzie.friedman@example.com,20-84567-3,Southeast University,PARTICIPANT,General`;
+    const csvContent = `name,email,studentId,university,role,category,semester,section
+Stephanie Perez,stephanie.perez@yahoo.com,24-71529-2,"Independent University, Bangladesh",PARTICIPANT,Project Showcase,1st,C
+Christy Lee,christy.lee@student.edu.bd,200-154-975,East West University,PARTICIPANT,Hackathon,1st,B
+Christopher Leonard,christopher.leonard@yahoo.com,20-41466-3,Jahangirnagar University,PARTICIPANT,General,12th,A
+Sara Anderson,sara.anderson@yahoo.com,19-29774-3,East West University,PARTICIPANT,Project Showcase,10th,E
+Greg Johnson,greg.johnson@yahoo.com,202-144-609,University of Liberal Arts Bangladesh,PARTICIPANT,Datathon,12th,D
+Robert Johnson,robert.johnson@example.com,227-145-206,American International University-Bangladesh,PARTICIPANT,Datathon,12th,E
+David Torres,david.torres@gmail.com,205-121-792,BRAC University,PARTICIPANT,Robotics,11th,D
+Alicia Lee,alicia.lee@gmail.com,23-73316-2,Jahangirnagar University,PARTICIPANT,Robotics,12th,E
+Kerri Carpenter,kerri.carpenter@example.com,18-62201-2,Rajshahi University of Engineering & Technology,PARTICIPANT,General,6th,B
+Alexis Mullen DVM,alexis.mullen.dvm@student.edu.bd,18-70646-2,University of Liberal Arts Bangladesh,PARTICIPANT,Gaming,12th,A
+Samantha Jimenez,samantha.jimenez@student.edu.bd,19-83019-1,Rajshahi University of Engineering & Technology,PARTICIPANT,Project Showcase,4th,F
+Holly Hughes,holly.hughes@student.edu.bd,21-32893-1,Southeast University,PARTICIPANT,Gaming,10th,B
+Mr. Barry Turner,mr..barry.turner@student.edu.bd,221-162-754,Shahjalal University of Science and Technology,PARTICIPANT,Robotics,5th,A
+Nicole Phillips,nicole.phillips@gmail.com,201-118-881,Green University of Bangladesh,PARTICIPANT,Project Showcase,12th,E
+Barry Smith DDS,barry.smith.dds@gmail.com,21-99988-3,United International University,PARTICIPANT,Programming Contest,3rd,D
+Edward Mayo,edward.mayo@example.com,207-175-087,North South University,PARTICIPANT,General,4th,D
+Kathryn Burch,kathryn.burch@student.edu.bd,22-25039-1,East West University,PARTICIPANT,Gaming,6th,E
+David Mcclain,david.mcclain@yahoo.com,24-21415-2,Shahjalal University of Science and Technology,PARTICIPANT,Programming Contest,9th,E
+Natasha Cooper,natasha.cooper@example.com,18-85289-2,Jahangirnagar University,PARTICIPANT,Programming Contest,3rd,A
+Amy Jones,amy.jones@gmail.com,19-83976-2,Ahsanullah University of Science and Technology,PARTICIPANT,Datathon,10th,A
+Carla Young,carla.young@student.edu.bd,18-13592-2,Shanto-Mariam University of Creative Technology,PARTICIPANT,Robotics,4th,B
+Angela Shaw,angela.shaw@student.edu.bd,223-153-284,Military Institute of Science and Technology,PARTICIPANT,Programming Contest,11th,F
+Michael Wilson,michael.wilson@student.edu.bd,20-86561-2,Ahsanullah University of Science and Technology,PARTICIPANT,Project Showcase,12th,B
+Dr. Alexander Smith,dr..alexander.smith@example.com,20-82464-1,United International University,PARTICIPANT,General,9th,F
+Shane Krause,shane.krause@gmail.com,207-193-742,American International University-Bangladesh,PARTICIPANT,Gaming,3rd,D
+Darlene Campbell,darlene.campbell@student.edu.bd,223-148-969,BRAC University,PARTICIPANT,Project Showcase,1st,E
+Mary Jackson,mary.jackson@example.com,23-13973-3,Bangladesh University of Engineering and Technology,PARTICIPANT,Project Showcase,7th,B
+Kathleen Singh,kathleen.singh@yahoo.com,227-123-413,Bangladesh University of Engineering and Technology,PARTICIPANT,Gaming,8th,D
+William Young,william.young@yahoo.com,204-161-920,Chittagong University of Engineering & Technology,PARTICIPANT,Hackathon,8th,E
+Corey Moss,corey.moss@student.edu.bd,20-63944-1,BRAC University,PARTICIPANT,Datathon,1st,E
+Betty Holland,betty.holland@example.com,212-143-412,University of Liberal Arts Bangladesh,PARTICIPANT,General,11th,F
+James Mcclure,james.mcclure@student.edu.bd,24-31337-2,University of Liberal Arts Bangladesh,PARTICIPANT,Hackathon,2nd,A
+Meghan Taylor,meghan.taylor@example.com,19-79499-3,East West University,PARTICIPANT,Datathon,12th,F
+David Cox,david.cox@yahoo.com,18-18540-2,Jahangirnagar University,PARTICIPANT,Programming Contest,8th,B
+Brian Smith,brian.smith@student.edu.bd,203-173-691,Southeast University,PARTICIPANT,Hackathon,1st,E
+Luis Macias,luis.macias@gmail.com,18-98139-3,Bangladesh University of Engineering and Technology,PARTICIPANT,General,2nd,F
+Matthew Summers,matthew.summers@student.edu.bd,220-127-767,Shahjalal University of Science and Technology,PARTICIPANT,Robotics,3rd,A
+Paul Gilbert,paul.gilbert@student.edu.bd,18-55050-3,Green University of Bangladesh,PARTICIPANT,Robotics,5th,B
+Stephen Rodriguez,stephen.rodriguez@yahoo.com,22-43357-3,University of Liberal Arts Bangladesh,PARTICIPANT,Gaming,8th,F
+Jennifer Howell MD,jennifer.howell.md@student.edu.bd,18-24802-3,United International University,PARTICIPANT,Gaming,4th,B
+Angela Curtis,angela.curtis@example.com,21-40939-2,Military Institute of Science and Technology,PARTICIPANT,General,9th,E
+Monica Baker,monica.baker@student.edu.bd,228-116-037,North South University,PARTICIPANT,Hackathon,9th,E
+Penny Mccoy,penny.mccoy@gmail.com,18-79580-1,Khulna University of Engineering & Technology,PARTICIPANT,Gaming,6th,C
+William Green,william.green@yahoo.com,206-141-488,Southeast University,PARTICIPANT,Project Showcase,12th,C
+David Miller,david.miller@yahoo.com,18-54029-3,Islamic University of Technology,PARTICIPANT,Hackathon,2nd,B
+Nicolas Howell,nicolas.howell@gmail.com,217-169-993,American International University-Bangladesh,PARTICIPANT,Robotics,3rd,A
+Tracy Bell,tracy.bell@gmail.com,230-199-215,United International University,PARTICIPANT,Hackathon,10th,C
+Melinda Ryan,melinda.ryan@gmail.com,218-143-513,Military Institute of Science and Technology,PARTICIPANT,Robotics,1st,C
+Rachel Gonzalez,rachel.gonzalez@student.edu.bd,229-151-107,East West University,PARTICIPANT,Programming Contest,5th,B
+Nicole Howard,nicole.howard@gmail.com,19-36405-2,Shahjalal University of Science and Technology,PARTICIPANT,General,3rd,C`;
     const filename = "Sample_Fest_Attendees.csv";
 
     if (Platform.OS === "web") {
