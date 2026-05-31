@@ -42,8 +42,7 @@ export default function AdminDirectoryScreen() {
   const [claimConfirmAttendee, setClaimConfirmAttendee] = useState<any>(null);
   const [errorModalInfo, setErrorModalInfo] = useState<any>(null);
 
-  // 🔴 FIX 1: Changed from useEffect to useFocusEffect so dynamic filters
-  // refresh automatically when navigating back from the Admin Center/Import screen!
+  // 1. Initial Load: Fetch dynamic options
   useFocusEffect(
     useCallback(() => {
       const fetchDynamicFilters = async () => {
@@ -69,10 +68,11 @@ export default function AdminDirectoryScreen() {
   );
 
   // 2. Debounce Search
+  // 🔴 FIX: Removed the unconditional setAttendees([]) that was wiping the screen
+  // after 500ms of the component mounting.
   useEffect(() => {
     const handler = setTimeout(() => {
       setDebouncedSearch(searchQuery);
-      setAttendees([]);
     }, 500);
     return () => clearTimeout(handler);
   }, [searchQuery]);
@@ -192,7 +192,6 @@ export default function AdminDirectoryScreen() {
           setSearchQuery={setSearchQuery}
           activeTab={activeTab}
           setActiveTab={(val) => {
-            // 🔴 FIX 2: Guard clauses added to all setter functions
             if (val !== activeTab) {
               setAttendees([]);
               setActiveTab(val);
@@ -200,7 +199,6 @@ export default function AdminDirectoryScreen() {
           }}
           selectedCategory={selectedCategory}
           setSelectedCategory={(val) => {
-            // 🔴 FIX 2: Guard clauses added to all setter functions
             if (val !== selectedCategory) {
               setAttendees([]);
               setSelectedCategory(val);
@@ -208,7 +206,6 @@ export default function AdminDirectoryScreen() {
           }}
           selectedUniversity={selectedUniversity}
           setSelectedUniversity={(val) => {
-            // 🔴 FIX 2: Guard clauses added to all setter functions
             if (val !== selectedUniversity) {
               setAttendees([]);
               setSelectedUniversity(val);

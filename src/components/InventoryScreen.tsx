@@ -57,7 +57,16 @@ export default function InventoryScreen({ role }: InventoryScreenProps) {
 
   const fetchInventory = async () => {
     try {
-      const response = await apiClient("/inventory", { method: "GET" });
+      // 🔴 FIX: Added deep cache-busting timestamp and strict headers to force fresh stats
+      const response = await apiClient(`/inventory?_t=${Date.now()}`, {
+        method: "GET",
+        headers: {
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          Pragma: "no-cache",
+          Expires: "0",
+        },
+      });
+
       if (response.ok) {
         const data = await response.json();
         setStats({
@@ -211,7 +220,7 @@ export default function InventoryScreen({ role }: InventoryScreenProps) {
           />
         ) : (
           <>
-            {/* 🔴 NEW: Animated Progress Hero Card */}
+            {/* Animated Progress Hero Card */}
             <View style={[styles.heroCard, { backgroundColor: theme.surface }]}>
               <View style={styles.heroTextRow}>
                 <View>
@@ -591,7 +600,6 @@ const styles = StyleSheet.create({
   },
   logoutBtn: { padding: 4 },
 
-  // 🔴 NEW: Progress Bar Styles
   heroCard: {
     padding: 24,
     borderRadius: SIZES.radius,

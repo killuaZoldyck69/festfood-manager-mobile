@@ -26,14 +26,24 @@ export default function AdminManagementScreen() {
           const token = await SecureStore.getItemAsync(
             "better-auth.session_token",
           );
+
+          // 🔴 FIX: Added strict cache-control headers
           const headers: Record<string, string> = {
             Accept: "application/json",
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            Pragma: "no-cache",
+            Expires: "0",
           };
           if (token) headers.Authorization = `Bearer ${token}`;
 
-          const res = await fetch(`${BASE_URL}/api/admin/attendees?limit=1`, {
-            headers,
-          });
+          // 🔴 FIX: Cache-busting timestamp appended to the URL
+          const res = await fetch(
+            `${BASE_URL}/api/admin/attendees?limit=1&_t=${Date.now()}`,
+            {
+              headers,
+            },
+          );
+
           if (res.ok) {
             const data = await res.json();
             const count =

@@ -54,7 +54,6 @@ export default function AdminLogsScreen() {
     useCallback(() => {
       const fetchDynamicFilters = async () => {
         try {
-          // 🔴 FIX 1: Cache-Busting! Appends timestamp and strict headers to bypass aggressive OS GET caching
           const response = await apiClient(
             `/admin/logs/filters?_t=${Date.now()}`,
             {
@@ -83,10 +82,11 @@ export default function AdminLogsScreen() {
   );
 
   // 2. Debounce Search
+  // 🔴 FIX: Removed the unconditional setLogs([]) that was wiping the screen
+  // after 500ms of the component mounting.
   useEffect(() => {
     const handler = setTimeout(() => {
       setDebouncedSearch(searchQuery);
-      setLogs([]);
     }, 500);
     return () => clearTimeout(handler);
   }, [searchQuery]);
@@ -95,7 +95,8 @@ export default function AdminLogsScreen() {
   const fetchLogs = async (pageNumber: number) => {
     setIsLoading(true);
     try {
-      let url = `/admin/logs?page=${pageNumber}&limit=10`;
+      // 🔴 FIX: Added deep cache-busting timestamp to the main query URL to force fresh data
+      let url = `/admin/logs?page=${pageNumber}&limit=10&_t=${Date.now()}`;
       if (activeTab !== "ALL") url += `&status=${activeTab}`;
       if (selectedCategory !== "ALL")
         url += `&category=${encodeURIComponent(selectedCategory)}`;
@@ -104,7 +105,16 @@ export default function AdminLogsScreen() {
       if (debouncedSearch.trim().length > 0)
         url += `&search=${encodeURIComponent(debouncedSearch.trim())}`;
 
-      const response = await apiClient(url, { method: "GET" });
+      // 🔴 FIX: Added strict no-cache headers to the main list query
+      const response = await apiClient(url, {
+        method: "GET",
+        headers: {
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          Pragma: "no-cache",
+          Expires: "0",
+        },
+      });
+
       if (response.ok) {
         const data = await response.json();
         const payload = data.data ? data.data : data;
@@ -169,7 +179,6 @@ export default function AdminLogsScreen() {
         setSearchQuery={setSearchQuery}
         activeTab={activeTab}
         setActiveTab={(val) => {
-          // 🔴 FIX 2: Guard Clause prevents the list wiping out if already selected
           if (val !== activeTab) {
             setLogs([]);
             setActiveTab(val);
@@ -177,7 +186,6 @@ export default function AdminLogsScreen() {
         }}
         selectedCategory={selectedCategory}
         setSelectedCategory={(val) => {
-          // 🔴 FIX 2: Guard Clause
           if (val !== selectedCategory) {
             setLogs([]);
             setSelectedCategory(val);
@@ -185,7 +193,6 @@ export default function AdminLogsScreen() {
         }}
         selectedVolunteerEmail={selectedVolunteerEmail}
         setSelectedVolunteerEmail={(val) => {
-          // 🔴 FIX 2: Guard Clause
           if (val !== selectedVolunteerEmail) {
             setLogs([]);
             setSelectedVolunteerEmail(val);
