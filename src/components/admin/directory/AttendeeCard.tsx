@@ -43,12 +43,24 @@ const AttendeeCard = React.memo(
             >
               {item.name}
             </Text>
+
             <Text
               style={[styles.traceText, { color: theme.textMuted }]}
               numberOfLines={1}
             >
               ID: {item.studentId}
             </Text>
+
+            {/* 🔴 NEW: Semester & Section (Defensive Render) */}
+            {(item.semester || item.section) && (
+              <Text
+                style={[styles.traceText, { color: theme.textMuted }]}
+                numberOfLines={1}
+              >
+                Sem & Sec: {item.semester || "N/A"} - {item.section || "N/A"}
+              </Text>
+            )}
+
             <View style={styles.listSubRow}>
               <Text
                 style={[styles.attendeeUniversity, { color: theme.textMuted }]}
@@ -120,7 +132,12 @@ const styles = StyleSheet.create({
   },
   traceText: { ...FONTS.body, fontSize: 13, fontWeight: "500", lineHeight: 17 },
   listSubRow: { flexDirection: "row", alignItems: "center", marginBottom: 6 },
-  attendeeUniversity: { ...FONTS.muted, fontSize: 12, flexShrink: 1 },
+  attendeeUniversity: {
+    ...FONTS.muted,
+    fontSize: 12,
+    flexShrink: 1,
+    marginTop: 2,
+  },
   categoryBadge: {
     alignSelf: "flex-start",
     paddingHorizontal: 8,

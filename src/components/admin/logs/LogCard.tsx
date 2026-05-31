@@ -16,6 +16,9 @@ export interface ScanLog {
   attendeeCategory?: string | null;
   attendeeEmail?: string | null;
   attendeeStudentId?: string | null;
+  // 🔴 NEW: Added explicit typings for semester and section
+  attendeeSemester?: string | null;
+  attendeeSection?: string | null;
 }
 
 const formatTime = (isoString: string) => {
@@ -88,6 +91,7 @@ const LogCard = React.memo(({ item }: { item: ScanLog }) => {
           >
             {item.attendeeName || "Unknown / Invalid Token"}
           </Text>
+
           {item.attendeeStudentId && (
             <Text
               style={[styles.traceText, { color: theme.textMuted }]}
@@ -96,6 +100,18 @@ const LogCard = React.memo(({ item }: { item: ScanLog }) => {
               ID: {item.attendeeStudentId}
             </Text>
           )}
+
+          {/* 🔴 NEW: Render Semester & Section */}
+          {(item.attendeeSemester || item.attendeeSection) && (
+            <Text
+              style={[styles.traceText, { color: theme.textMuted }]}
+              numberOfLines={1}
+            >
+              Sem: {item.attendeeSemester || "N/A"} | Sec:{" "}
+              {item.attendeeSection || "N/A"}
+            </Text>
+          )}
+
           {item.attendeeEmail && (
             <Text
               style={[
@@ -107,6 +123,7 @@ const LogCard = React.memo(({ item }: { item: ScanLog }) => {
               {item.attendeeEmail}
             </Text>
           )}
+
           <Text
             style={[styles.attendeeUniversity, { color: theme.textMuted }]}
             numberOfLines={1}
@@ -129,9 +146,9 @@ const LogCard = React.memo(({ item }: { item: ScanLog }) => {
               </View>
             )}
           </View>
-          <Text style={[styles.tokenText, { color: theme.textMuted }]}>
+          {/* <Text style={[styles.tokenText, { color: theme.textMuted }]}>
             Token: {item.scannedToken.substring(0, 8).toUpperCase()}...
-          </Text>
+          </Text> */}
         </View>
 
         <View style={styles.divider} />

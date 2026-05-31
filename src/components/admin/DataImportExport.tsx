@@ -9,7 +9,6 @@ import * as SecureStore from "expo-secure-store";
 import * as Sharing from "expo-sharing";
 import React, { useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
   Platform,
   StyleSheet,
@@ -33,11 +32,11 @@ export default function DataImportExport({
   const theme = useTheme();
   const router = useRouter();
 
+  // 🔴 We removed isRedownloading and unified everything under the main status state
   const [status, setStatus] = useState<UploadStatus>("idle");
   const [progress, setProgress] = useState(0);
   const [insertedCount, setInsertedCount] = useState(0);
   const [pdfUri, setPdfUri] = useState<string | null>(null);
-  const [isRedownloading, setIsRedownloading] = useState(false);
 
   const getAuthHeaders = async () => {
     const headers: Record<string, string> = { Accept: "application/json" };
@@ -108,7 +107,6 @@ Nicole Howard,nicole.howard@gmail.com,19-36405-2,Shahjalal University of Science
       link.download = filename;
       link.click();
     } else if (Platform.OS === "android") {
-      // 🔴 FIX 2: Force Android to open File Manager instead of WhatsApp
       try {
         const permissions =
           await FileSystemLegacy.StorageAccessFramework.requestDirectoryPermissionsAsync();
@@ -122,16 +120,12 @@ Nicole Howard,nicole.howard@gmail.com,19-36405-2,Shahjalal University of Science
           await FileSystemLegacy.writeAsStringAsync(fileUri, csvContent, {
             encoding: FileSystemLegacy.EncodingType.UTF8,
           });
-          Alert.alert(
-            "Success 💾",
-            "Sample CSV saved successfully to your selected folder!",
-          );
+          Alert.alert("Success ✅", "Sample CSV saved successfully!");
         }
       } catch (error) {
-        Alert.alert("Error", "Failed to save file to designated directory.");
+        Alert.alert("Error", "Failed to save file.");
       }
     } else {
-      // iOS fallback (Uses Share Sheet strictly for "Save to Files")
       try {
         const csvFile = new File(Paths.cache, filename);
         await csvFile.write(csvContent);
@@ -231,20 +225,17 @@ Nicole Howard,nicole.howard@gmail.com,19-36405-2,Shahjalal University of Science
         setPdfUri(linkSource);
       } else {
         const destFile = new File(Paths.document, data.fileName);
-
-        // 🔴 FIX 3: Using the explicit legacy API for downloads
         const downloadResumable = FileSystemLegacy.createDownloadResumable(
           downloadUrl,
           destFile.uri,
           { headers },
           (ev) => {
-            if (ev.totalBytesExpectedToWrite > 0) {
+            if (ev.totalBytesExpectedToWrite > 0)
               setProgress(
                 Math.round(
                   (ev.totalBytesWritten / ev.totalBytesExpectedToWrite) * 100,
                 ),
               );
-            }
           },
         );
         await downloadResumable.downloadAsync();
@@ -281,8 +272,11 @@ Nicole Howard,nicole.howard@gmail.com,19-36405-2,Shahjalal University of Science
     }
   };
 
+  // 🔴 FIX: Upgraded to use the unified progress bar and tracking callbacks
   const redownloadAllTickets = async () => {
-    setIsRedownloading(true);
+    setStatus("downloading");
+    setProgress(0);
+
     try {
       const headers = await getAuthHeaders();
       const endpoint = `${BASE_URL}/api/admin/tickets/download-all`;
@@ -291,6 +285,7 @@ Nicole Howard,nicole.howard@gmail.com,19-36405-2,Shahjalal University of Science
       if (Platform.OS === "web") {
         const res = await fetch(endpoint, { method: "GET", headers });
         if (!res.ok) throw new Error("Failed to generate PDF.");
+        setProgress(100);
         const blob = await res.blob();
         const link = document.createElement("a");
         link.href = URL.createObjectURL(blob);
@@ -299,10 +294,22 @@ Nicole Howard,nicole.howard@gmail.com,19-36405-2,Shahjalal University of Science
       } else {
         const destFile = new File(Paths.document, filename);
 
-        // 🔴 FIX 4: Legacy API integration
-        await FileSystemLegacy.downloadAsync(endpoint, destFile.uri, {
-          headers,
-        });
+        const downloadResumable = FileSystemLegacy.createDownloadResumable(
+          endpoint,
+          destFile.uri,
+          { headers },
+          (ev) => {
+            if (ev.totalBytesExpectedToWrite > 0) {
+              setProgress(
+                Math.round(
+                  (ev.totalBytesWritten / ev.totalBytesExpectedToWrite) * 100,
+                ),
+              );
+            }
+          },
+        );
+
+        await downloadResumable.downloadAsync();
 
         if (await Sharing.isAvailableAsync()) {
           await Sharing.shareAsync(destFile.uri, {
@@ -314,7 +321,8 @@ Nicole Howard,nicole.howard@gmail.com,19-36405-2,Shahjalal University of Science
     } catch (error: any) {
       Alert.alert("Download Failed", error.message);
     } finally {
-      setIsRedownloading(false);
+      // Revert back to the form UI once done
+      setStatus("idle");
     }
   };
 
@@ -340,8 +348,8 @@ Nicole Howard,nicole.howard@gmail.com,19-36405-2,Shahjalal University of Science
           <View style={styles.progressHeader}>
             <Text style={[styles.progressTitle, { color: theme.primary }]}>
               {status === "uploading"
-                ? "Uploading CSV Data..."
-                : "Downloading Tickets..."}
+                ? "Uploading & Processing Data..."
+                : "Generating Ticket PDF..."}
             </Text>
             <Text style={[styles.progressPercentage, { color: theme.primary }]}>
               {Math.round(progress)}%
@@ -418,101 +426,103 @@ Nicole Howard,nicole.howard@gmail.com,19-36405-2,Shahjalal University of Science
         </View>
       )}
 
-      {status !== "success" &&
-        status !== "uploading" &&
-        status !== "downloading" && (
-          <>
-            <View
-              style={[
-                styles.guideCard,
-                {
-                  backgroundColor: `${theme.primary}05`,
-                  borderColor: theme.primary,
-                },
-              ]}
-            >
-              <View style={styles.guideHeader}>
-                <Feather name="info" size={20} color={theme.primary} />
-                <Text style={[styles.guideTitle, { color: theme.primary }]}>
-                  CSV Format Guide
-                </Text>
-              </View>
-              <Text style={[styles.guideText, { color: theme.textMain }]}>
-                Columns: <Text style={styles.codeText}>name</Text>,{" "}
-                <Text style={styles.codeText}>email</Text>,{" "}
-                <Text style={styles.codeText}>studentId</Text>,{" "}
-                <Text style={styles.codeText}>university</Text>,{" "}
-                <Text style={styles.codeText}>role</Text>,{" "}
-                <Text style={styles.codeText}>category</Text>.
+      {status === "idle" && (
+        <>
+          {/* 🔴 FIX: Upgraded to a professional solid-bordered guide card */}
+          <View
+            style={[
+              styles.guideCard,
+              {
+                backgroundColor: `${theme.primary}05`,
+                borderColor: `${theme.primary}30`,
+              },
+            ]}
+          >
+            <View style={styles.guideHeader}>
+              <Feather name="info" size={18} color={theme.primary} />
+              <Text style={[styles.guideTitle, { color: theme.primary }]}>
+                CSV Format Requirements
               </Text>
-              <TouchableOpacity
-                style={styles.downloadRow}
-                onPress={downloadSampleCsv}
-              >
-                <Feather name="download" size={16} color={theme.primary} />
-                <Text style={[styles.downloadText, { color: theme.primary }]}>
-                  Download Sample CSV
-                </Text>
-              </TouchableOpacity>
             </View>
-
+            <Text style={[styles.guideText, { color: theme.textMain }]}>
+              Columns: <Text style={styles.codeText}>name</Text>,{" "}
+              <Text style={styles.codeText}>email</Text>,{" "}
+              <Text style={styles.codeText}>studentId</Text>,{" "}
+              <Text style={styles.codeText}>university</Text>,{" "}
+              <Text style={styles.codeText}>role</Text>,{" "}
+              <Text style={styles.codeText}>category</Text>,{" "}
+              <Text style={styles.codeText}>semester</Text>,{" "}
+              <Text style={styles.codeText}>section</Text>
+            </Text>
             <TouchableOpacity
-              style={[
-                styles.dropzone,
-                { borderColor: theme.border, backgroundColor: theme.surface },
-              ]}
-              onPress={pickDocument}
+              style={styles.downloadRow}
+              onPress={downloadSampleCsv}
             >
-              <View
-                style={[
-                  styles.iconCircle,
-                  { backgroundColor: `${theme.primary}15` },
-                ]}
-              >
-                <Ionicons
-                  name="cloud-upload-outline"
-                  size={32}
-                  color={theme.primary}
-                />
-              </View>
-              <Text style={[styles.dropzoneTitle, { color: theme.textMain }]}>
-                Tap to select CSV file
+              <Feather name="download" size={14} color={theme.primary} />
+              <Text style={[styles.downloadText, { color: theme.primary }]}>
+                Download Sample Template
               </Text>
             </TouchableOpacity>
+          </View>
 
-            {hasAttendees && (
-              <TouchableOpacity
-                style={[
-                  styles.secondaryButton,
-                  { borderColor: theme.primary, marginBottom: 24 },
-                ]}
-                onPress={redownloadAllTickets}
-                disabled={isRedownloading}
+          {/* 🔴 FIX: Cleaned up dropzone text and spacing */}
+          <TouchableOpacity
+            style={[
+              styles.dropzone,
+              { borderColor: theme.border, backgroundColor: theme.surface },
+            ]}
+            onPress={pickDocument}
+          >
+            <View
+              style={[
+                styles.iconCircle,
+                { backgroundColor: `${theme.primary}10` },
+              ]}
+            >
+              <Ionicons
+                name="cloud-upload-outline"
+                size={32}
+                color={theme.primary}
+              />
+            </View>
+            <Text style={[styles.dropzoneTitle, { color: theme.textMain }]}>
+              Tap to select CSV file
+            </Text>
+            <Text
+              style={{
+                ...FONTS.body,
+                color: theme.textMuted,
+                fontSize: 13,
+                marginTop: 4,
+              }}
+            >
+              Strictly .csv format
+            </Text>
+          </TouchableOpacity>
+
+          {hasAttendees && (
+            <TouchableOpacity
+              style={[
+                styles.secondaryButton,
+                { borderColor: theme.primary, marginBottom: 24 },
+              ]}
+              onPress={redownloadAllTickets}
+            >
+              <Feather
+                name="download-cloud"
+                size={20}
+                color={theme.primary}
+                style={{ marginRight: 8 }}
+              />
+              <Text
+                style={[styles.secondaryButtonText, { color: theme.primary }]}
               >
-                {isRedownloading ? (
-                  <ActivityIndicator
-                    color={theme.primary}
-                    style={{ marginRight: 8 }}
-                  />
-                ) : (
-                  <Feather
-                    name="download-cloud"
-                    size={20}
-                    color={theme.primary}
-                    style={{ marginRight: 8 }}
-                  />
-                )}
-                <Text
-                  style={[styles.secondaryButtonText, { color: theme.primary }]}
-                >
-                  {isRedownloading
-                    ? "GENERATING PDF..."
-                    : "REDOWNLOAD TICKETS BACKUP"}
-                </Text>
-              </TouchableOpacity>
-            )}
-          </>
-        )}
+                REDOWNLOAD TICKETS BACKUP
+              </Text>
+            </TouchableOpacity>
+          )}
+        </>
+      )}
     </View>
   );
 }
@@ -549,34 +559,46 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   progressBarFill: { height: "100%", borderRadius: 4 },
+
+  // 🔴 NEW: Solid professional guide card
   guideCard: {
-    padding: 20,
+    padding: 16,
     borderRadius: SIZES.radius,
     borderWidth: 1,
-    borderStyle: "dashed",
     marginBottom: 16,
   },
   guideHeader: { flexDirection: "row", alignItems: "center", marginBottom: 12 },
-  guideTitle: { ...FONTS.body, fontWeight: "700", fontSize: 18, marginLeft: 8 },
-  guideText: { ...FONTS.body, lineHeight: 24, marginBottom: 16 },
+  guideTitle: { ...FONTS.body, fontWeight: "700", fontSize: 15, marginLeft: 8 },
+  guideText: { ...FONTS.body, lineHeight: 24, marginBottom: 16, fontSize: 14 },
   codeText: {
     fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
     backgroundColor: "#E2E8F0",
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
-    fontSize: 14,
+    fontSize: 13,
   },
-  downloadRow: { flexDirection: "row", alignItems: "center" },
-  downloadText: { ...FONTS.body, fontWeight: "600", marginLeft: 8 },
+  downloadRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    paddingVertical: 4,
+  },
+  downloadText: {
+    ...FONTS.body,
+    fontWeight: "700",
+    fontSize: 13,
+    marginLeft: 6,
+  },
+
   dropzone: {
-    padding: 40,
+    padding: 32,
     borderRadius: SIZES.radius,
     borderWidth: 2,
     borderStyle: "dashed",
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 24,
+    marginBottom: 16,
   },
   iconCircle: {
     width: 64,
@@ -586,7 +608,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginBottom: 16,
   },
-  dropzoneTitle: { ...FONTS.header, fontSize: 20, marginBottom: 8 },
+  dropzoneTitle: { ...FONTS.header, fontSize: 18 },
+
   successContainer: { marginTop: 8, marginBottom: 24 },
   successCard: {
     flexDirection: "row",

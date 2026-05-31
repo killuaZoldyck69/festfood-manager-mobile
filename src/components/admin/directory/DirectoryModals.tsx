@@ -248,15 +248,38 @@ export default function DirectoryModals({
                 >
                   ID: {selectedAttendee.studentId}
                 </Text>
+
+                {/* Dynamically adjust bottom margin based on whether semester/section exists */}
                 <Text
                   style={[
                     styles.traceText,
-                    { color: theme.textMuted, marginBottom: 8 },
+                    {
+                      color: theme.textMuted,
+                      marginBottom:
+                        selectedAttendee.semester || selectedAttendee.section
+                          ? 0
+                          : 8,
+                    },
                   ]}
                   numberOfLines={1}
                 >
                   {selectedAttendee.email}
                 </Text>
+
+                {/* 🔴 NEW: Semester & Section */}
+                {(selectedAttendee.semester || selectedAttendee.section) && (
+                  <Text
+                    style={[
+                      styles.traceText,
+                      { color: theme.textMuted, marginBottom: 8 },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    Semester: {selectedAttendee.semester || "N/A"} | Section:{" "}
+                    {selectedAttendee.section || "N/A"}
+                  </Text>
+                )}
+
                 <Text
                   style={[styles.detailUniversity, { color: theme.textMuted }]}
                 >
@@ -282,7 +305,8 @@ export default function DirectoryModals({
                   <Text
                     style={[styles.modalIdText, { color: theme.textMuted }]}
                   >
-                    Token: #{selectedAttendee.id.substring(0, 10).toUpperCase()}
+                    Token: #{selectedAttendee.id.substring(0, 12).toUpperCase()}
+                    ...
                   </Text>
                 </View>
 
