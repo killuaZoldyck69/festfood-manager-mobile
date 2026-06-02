@@ -1,7 +1,7 @@
 import { useTheme } from "@/hooks/use-theme";
 import { Tabs } from "expo-router";
 import React from "react";
-import { Platform } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function SharedTabs({
   children,
@@ -9,6 +9,14 @@ export default function SharedTabs({
   children: React.ReactNode;
 }) {
   const theme = useTheme();
+
+  // Dynamically fetches the exact height of the device's bottom navigation/gesture area
+  const insets = useSafeAreaInsets();
+
+  // Establish a base height for the tab content, then safely add the device's inset.
+  // We use Math.max to ensure there is always at least 10px of padding even on devices with 0 bottom inset.
+  const paddingBottom = Math.max(insets.bottom, 10);
+  const tabBarHeight = 60 + paddingBottom;
 
   return (
     <Tabs
@@ -19,8 +27,8 @@ export default function SharedTabs({
         tabBarStyle: {
           backgroundColor: theme.surface,
           borderTopColor: theme.border,
-          height: Platform.OS === "ios" ? 90 : 70,
-          paddingBottom: Platform.OS === "ios" ? 28 : 10,
+          height: tabBarHeight,
+          paddingBottom: paddingBottom,
           paddingTop: 8,
           position: "relative",
         },
