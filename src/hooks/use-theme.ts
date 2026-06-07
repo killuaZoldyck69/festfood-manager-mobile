@@ -1,7 +1,5 @@
-import { Colors } from "@/constants/theme";
+import { AppTheme, Colors } from "../constants/theme";
 
-export function useTheme() {
-  // We simply return the light theme directly.
-  // No more listening for system preferences!
+export function useTheme(): AppTheme {
   return Colors.light;
 }

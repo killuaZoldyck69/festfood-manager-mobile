@@ -1,10 +1,10 @@
 import { useRouter, useSegments } from "expo-router";
-import * as SecureStore from "expo-secure-store"; // <-- ADD THIS
+import * as SecureStore from "expo-secure-store";
 import React, { createContext, useContext, useEffect } from "react";
-import { Platform } from "react-native"; // <-- ADD THIS
+import { Platform } from "react-native";
 import { authClient } from "../lib/auth-client";
 
-type Role = "ADMIN" | "VOLUNTEER" | "admin" | "volunteer";
+type Role = "ADMIN" | "VOLUNTEER";
 
 interface User {
   id: string;
@@ -22,7 +22,11 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+export function AuthProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}): React.ReactElement {
   const { data, isPending } = authClient.useSession();
   const segments = useSegments();
   const router = useRouter();
@@ -38,7 +42,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!user && inAuthGroup) {
       router.replace("/");
     } else if (user) {
-      const isAdminUser = user.role === "ADMIN" || user.role === "admin";
+      const isAdminUser = user.role === "ADMIN";
       const isCorrectGroup =
         (isAdminUser && segments[0] === "(admin)") ||
         (!isAdminUser && segments[0] === "(volunteer)");
@@ -51,8 +55,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [user, segments, isPending]);
 
-  // 🔴 THE FIX: Manually handle the mobile token
-  const signIn = async (email: string, password: string) => {
+  const signIn = async (email: string, password: string): Promise<void> => {
     const { data: authData, error } = await authClient.signIn.email({
       email,
       password,
@@ -60,7 +63,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (error) throw new Error(error.message);
 
-    // Save the token physically so apiClient.ts can read it on mobile!
     if (authData && Platform.OS !== "web" && authData.token) {
       await SecureStore.setItemAsync(
         "better-auth.session_token",
@@ -69,10 +71,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const signOut = async () => {
+  const signOut = async (): Promise<void> => {
     await authClient.signOut();
 
-    // Clean up the physical token
     if (Platform.OS !== "web") {
       await SecureStore.deleteItemAsync("better-auth.session_token");
     }
@@ -89,7 +90,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
-export const useAuth = () => {
+export const useAuth = (): AuthContextType => {
   const context = useContext(AuthContext);
   if (!context) throw new Error("useAuth must be used within an AuthProvider");
   return context;
