@@ -368,6 +368,23 @@ export default function DirectoryModals({
                           >
                             Ticket scanned and claimed.
                           </Text>
+
+                          {/* NEW SCANNER NAME DISPLAY */}
+                          {selectedAttendee.scannerName ? (
+                            <Text
+                              style={[
+                                styles.auditDesc,
+                                {
+                                  color: theme.textMuted,
+                                  fontSize: 13,
+                                  marginTop: 4,
+                                  fontWeight: "600",
+                                },
+                              ]}
+                            >
+                              Action by: {selectedAttendee.scannerName}
+                            </Text>
+                          ) : null}
                         </View>
                       </View>
                     )}

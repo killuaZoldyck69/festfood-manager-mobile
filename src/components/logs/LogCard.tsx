@@ -67,6 +67,46 @@ const LogCard = React.memo(({ item }: LogCardProps): React.ReactElement => {
           >
             {item.attendeeName || "Unknown / Invalid Token"}
           </Text>
+
+          {item.attendeeEmail ? (
+            <Text
+              style={[styles.subText, { color: theme.textMuted }]}
+              numberOfLines={1}
+            >
+              {item.attendeeEmail}
+            </Text>
+          ) : null}
+
+          {item.studentId ? (
+            <Text style={[styles.subText, { color: theme.textMuted }]}>
+              ID: {item.studentId}{" "}
+              {item.section ? `• Sec: ${item.section}` : ""}
+            </Text>
+          ) : null}
+
+          {item.university ? (
+            <Text
+              style={[styles.subText, { color: theme.textMuted }]}
+              numberOfLines={1}
+            >
+              {item.university}
+            </Text>
+          ) : null}
+
+          {item.category ? (
+            <View
+              style={[
+                styles.categoryBadge,
+                { backgroundColor: `${theme.primary}15` },
+              ]}
+            >
+              <Text
+                style={[styles.categoryBadgeText, { color: theme.primary }]}
+              >
+                {item.category}
+              </Text>
+            </View>
+          ) : null}
         </View>
 
         <View style={styles.divider} />
@@ -81,6 +121,14 @@ const LogCard = React.memo(({ item }: LogCardProps): React.ReactElement => {
           >
             {item.volunteerName || "System"}
           </Text>
+          {item.volunteerEmail ? (
+            <Text
+              style={[styles.subText, { color: theme.textMuted }]}
+              numberOfLines={1}
+            >
+              {item.volunteerEmail}
+            </Text>
+          ) : null}
         </View>
       </View>
     </View>
@@ -137,8 +185,27 @@ const styles = StyleSheet.create({
   },
   attendeeName: {
     ...FONTS.body,
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "700",
+    marginBottom: 4,
+  },
+  subText: {
+    ...FONTS.body,
+    fontSize: 12,
     marginBottom: 2,
+  },
+  categoryBadge: {
+    alignSelf: "flex-start",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+    marginTop: 6,
+  },
+  categoryBadgeText: {
+    ...FONTS.body,
+    fontSize: 10,
+    fontWeight: "800",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
 });

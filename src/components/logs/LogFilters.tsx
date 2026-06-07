@@ -255,7 +255,7 @@ export default function LogFilters({
                   const displayText =
                     vol.name === "ALL"
                       ? "All Volunteers"
-                      : `${index}. ${vol.name} (${vol.email}) - ${vol.count} scans`;
+                      : `${index + 1}. ${vol.name} (${vol.email}) - ${vol.count} scans`;
 
                   return (
                     <TouchableOpacity

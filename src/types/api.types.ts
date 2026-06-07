@@ -24,6 +24,7 @@ export interface AttendeeListItem {
   qrToken: string;
   foodClaimed: boolean;
   claimedAt: string | null;
+  scannerName: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -40,7 +41,13 @@ export interface FormattedLog {
   scannedToken: string;
   scannedAt: string;
   volunteerName: string | null;
+  volunteerEmail: string | null;
   attendeeName: string | null;
+  attendeeEmail: string | null;
+  studentId: string | null;
+  category: string | null;
+  university: string | null;
+  section: string | null;
 }
 
 export interface LogFilterOptions {

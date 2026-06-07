@@ -104,7 +104,10 @@ export default function AdminDirectoryScreen(): React.ReactElement {
   };
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.surface }]}>
+    <SafeAreaView
+      edges={["top", "left", "right"]}
+      style={[styles.safeArea, { backgroundColor: theme.surface }]}
+    >
       <View style={styles.header}>
         <Text style={[styles.headerTitle, { color: theme.primary }]}>
           Attendee Directory
@@ -179,7 +182,12 @@ export default function AdminDirectoryScreen(): React.ReactElement {
 const styles = StyleSheet.create({
   safeArea: { flex: 1 },
   container: { flex: 1 },
-  header: { padding: SIZES.padding },
+  header: {
+    padding: SIZES.padding,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
   headerTitle: { ...FONTS.header, fontSize: 28 },
   totalLogs: { ...FONTS.body, fontWeight: "600" },
   list: { flex: 1, paddingHorizontal: SIZES.padding },

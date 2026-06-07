@@ -242,7 +242,7 @@ export default function DirectoryFilters({
                   const displayText =
                     uni.name === "ALL"
                       ? "All Universities"
-                      : `${index}. ${uni.name} (${uni.count})`;
+                      : `${index + 1}. ${uni.name} (${uni.count})`;
                   return (
                     <TouchableOpacity
                       key={uni.name}
