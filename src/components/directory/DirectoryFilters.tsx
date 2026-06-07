@@ -1,3 +1,5 @@
+import { FONTS, SIZES } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import React, { useState } from "react";
 import {
@@ -8,8 +10,6 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { FONTS, SIZES } from "../../../constants/theme";
-import { useTheme } from "../../../hooks/use-theme";
 
 export interface DirectoryFilterAggregation {
   categories: { name: string; count: number }[];

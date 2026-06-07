@@ -1,10 +1,10 @@
+import { AppTheme, FONTS, SIZES } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
+import { FormattedLog } from "@/types";
+import { formatDate, formatTime } from "@/utils/formatDate";
 import { Feather } from "@expo/vector-icons";
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
-import { AppTheme, FONTS, SIZES } from "../../../constants/theme";
-import { useTheme } from "../../../hooks/use-theme";
-import { FormattedLog } from "../../../types";
-import { formatDate, formatTime } from "../../../utils/formatDate";
 
 const getStatusVisuals = (
   status: string,

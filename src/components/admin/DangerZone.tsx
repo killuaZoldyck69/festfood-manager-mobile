@@ -1,40 +1,28 @@
-import { FONTS, SIZES } from "@/constants/theme";
-import { useTheme } from "@/hooks/use-theme";
 import { Feather } from "@expo/vector-icons";
-import * as SecureStore from "expo-secure-store";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
+import { FONTS, SIZES } from "../../constants/theme";
+import { useTheme } from "../../hooks/use-theme";
+import { apiClient } from "../../utils/apiClient";
 
-const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
+interface DangerZoneProps {
+  onAttendeesWiped: () => void;
+}
 
 export default function DangerZone({
   onAttendeesWiped,
-}: {
-  onAttendeesWiped: () => void;
-}) {
+}: DangerZoneProps): React.ReactElement {
   const theme = useTheme();
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  const fetchWithAuth = async (endpoint: string, options: RequestInit = {}) => {
-    const token = await SecureStore.getItemAsync("better-auth.session_token");
-    const headers: any = {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      ...(Platform.OS !== "web" ? { Origin: BASE_URL || "" } : {}),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    };
-    return fetch(`${BASE_URL}${endpoint}`, { ...options, headers });
-  };
-
-  const handleResetLogistics = () => {
+  const handleResetLogistics = (): void => {
     Alert.alert(
       "⚠️ Reset Inventory",
       "This will reset all inventory counts to zero. Are you absolutely sure?",
@@ -46,14 +34,19 @@ export default function DangerZone({
           onPress: async () => {
             setActionLoading("RESET_LOGISTICS");
             try {
-              const res = await fetchWithAuth("/api/admin/logistics/reset", {
+              const res = await apiClient("/admin/logistics/reset", {
                 method: "POST",
               });
-              if (res.ok)
+              if (res.ok) {
                 Alert.alert("Success", "Inventory has been reset to zero.");
-              else throw new Error("Failed to reset inventory.");
-            } catch (error: any) {
-              Alert.alert("Error", error.message);
+              } else {
+                throw new Error("Failed to reset inventory.");
+              }
+            } catch (error) {
+              Alert.alert(
+                "Error",
+                error instanceof Error ? error.message : "Unknown error",
+              );
             } finally {
               setActionLoading(null);
             }
@@ -63,7 +56,7 @@ export default function DangerZone({
     );
   };
 
-  const handleWipeAttendees = () => {
+  const handleWipeAttendees = (): void => {
     Alert.alert(
       "☢️ WIPE ALL ATTENDEES",
       "CRITICAL WARNING: This deletes ALL attendees and scan logs. Proceed?",
@@ -75,15 +68,20 @@ export default function DangerZone({
           onPress: async () => {
             setActionLoading("WIPE_ATTENDEES");
             try {
-              const res = await fetchWithAuth("/api/admin/attendees/wipe", {
+              const res = await apiClient("/admin/attendees/wipe", {
                 method: "DELETE",
               });
               if (res.ok) {
                 Alert.alert("Wiped", "All attendee data has been eradicated.");
                 onAttendeesWiped();
-              } else throw new Error("Failed to wipe attendees.");
-            } catch (error: any) {
-              Alert.alert("Error", error.message);
+              } else {
+                throw new Error("Failed to wipe attendees.");
+              }
+            } catch (error) {
+              Alert.alert(
+                "Error",
+                error instanceof Error ? error.message : "Unknown error",
+              );
             } finally {
               setActionLoading(null);
             }

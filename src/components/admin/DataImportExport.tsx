@@ -1,5 +1,3 @@
-import { FONTS, SIZES } from "@/constants/theme";
-import { useTheme } from "@/hooks/use-theme";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
 import { File, Paths } from "expo-file-system";
@@ -16,8 +14,11 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { API_URL } from "../../constants/api";
+import { FONTS, SIZES } from "../../constants/theme";
+import { useTheme } from "../../hooks/use-theme";
+import { apiClient, uploadFile } from "../../utils/apiClient";
 
-const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
 type UploadStatus = "idle" | "uploading" | "downloading" | "success" | "error";
 
 interface Props {
@@ -28,76 +29,17 @@ interface Props {
 export default function DataImportExport({
   hasAttendees,
   onAttendeesUpdated,
-}: Props) {
+}: Props): React.ReactElement {
   const theme = useTheme();
   const router = useRouter();
 
-  // 🔴 We removed isRedownloading and unified everything under the main status state
   const [status, setStatus] = useState<UploadStatus>("idle");
-  const [progress, setProgress] = useState(0);
-  const [insertedCount, setInsertedCount] = useState(0);
+  const [progress, setProgress] = useState<number>(0);
+  const [insertedCount, setInsertedCount] = useState<number>(0);
   const [pdfUri, setPdfUri] = useState<string | null>(null);
 
-  const getAuthHeaders = async () => {
-    const headers: Record<string, string> = { Accept: "application/json" };
-    if (Platform.OS !== "web") headers["Origin"] = BASE_URL || "";
-    const token = await SecureStore.getItemAsync("better-auth.session_token");
-    if (token) headers["Authorization"] = `Bearer ${token}`;
-    return headers;
-  };
-
-  const downloadSampleCsv = async () => {
-    const csvContent = `name,email,studentId,university,role,category,semester,section
-Stephanie Perez,stephanie.perez@yahoo.com,24-71529-2,"Independent University, Bangladesh",PARTICIPANT,Project Showcase,1st,C
-Christy Lee,christy.lee@student.edu.bd,200-154-975,East West University,PARTICIPANT,Hackathon,1st,B
-Christopher Leonard,christopher.leonard@yahoo.com,20-41466-3,Jahangirnagar University,PARTICIPANT,General,12th,A
-Sara Anderson,sara.anderson@yahoo.com,19-29774-3,East West University,PARTICIPANT,Project Showcase,10th,E
-Greg Johnson,greg.johnson@yahoo.com,202-144-609,University of Liberal Arts Bangladesh,PARTICIPANT,Datathon,12th,D
-Robert Johnson,robert.johnson@example.com,227-145-206,American International University-Bangladesh,PARTICIPANT,Datathon,12th,E
-David Torres,david.torres@gmail.com,205-121-792,BRAC University,PARTICIPANT,Robotics,11th,D
-Alicia Lee,alicia.lee@gmail.com,23-73316-2,Jahangirnagar University,PARTICIPANT,Robotics,12th,E
-Kerri Carpenter,kerri.carpenter@example.com,18-62201-2,Rajshahi University of Engineering & Technology,PARTICIPANT,General,6th,B
-Alexis Mullen DVM,alexis.mullen.dvm@student.edu.bd,18-70646-2,University of Liberal Arts Bangladesh,PARTICIPANT,Gaming,12th,A
-Samantha Jimenez,samantha.jimenez@student.edu.bd,19-83019-1,Rajshahi University of Engineering & Technology,PARTICIPANT,Project Showcase,4th,F
-Holly Hughes,holly.hughes@student.edu.bd,21-32893-1,Southeast University,PARTICIPANT,Gaming,10th,B
-Mr. Barry Turner,mr..barry.turner@student.edu.bd,221-162-754,Shahjalal University of Science and Technology,PARTICIPANT,Robotics,5th,A
-Nicole Phillips,nicole.phillips@gmail.com,201-118-881,Green University of Bangladesh,PARTICIPANT,Project Showcase,12th,E
-Barry Smith DDS,barry.smith.dds@gmail.com,21-99988-3,United International University,PARTICIPANT,Programming Contest,3rd,D
-Edward Mayo,edward.mayo@example.com,207-175-087,North South University,PARTICIPANT,General,4th,D
-Kathryn Burch,kathryn.burch@student.edu.bd,22-25039-1,East West University,PARTICIPANT,Gaming,6th,E
-David Mcclain,david.mcclain@yahoo.com,24-21415-2,Shahjalal University of Science and Technology,PARTICIPANT,Programming Contest,9th,E
-Natasha Cooper,natasha.cooper@example.com,18-85289-2,Jahangirnagar University,PARTICIPANT,Programming Contest,3rd,A
-Amy Jones,amy.jones@gmail.com,19-83976-2,Ahsanullah University of Science and Technology,PARTICIPANT,Datathon,10th,A
-Carla Young,carla.young@student.edu.bd,18-13592-2,Shanto-Mariam University of Creative Technology,PARTICIPANT,Robotics,4th,B
-Angela Shaw,angela.shaw@student.edu.bd,223-153-284,Military Institute of Science and Technology,PARTICIPANT,Programming Contest,11th,F
-Michael Wilson,michael.wilson@student.edu.bd,20-86561-2,Ahsanullah University of Science and Technology,PARTICIPANT,Project Showcase,12th,B
-Dr. Alexander Smith,dr..alexander.smith@example.com,20-82464-1,United International University,PARTICIPANT,General,9th,F
-Shane Krause,shane.krause@gmail.com,207-193-742,American International University-Bangladesh,PARTICIPANT,Gaming,3rd,D
-Darlene Campbell,darlene.campbell@student.edu.bd,223-148-969,BRAC University,PARTICIPANT,Project Showcase,1st,E
-Mary Jackson,mary.jackson@example.com,23-13973-3,Bangladesh University of Engineering and Technology,PARTICIPANT,Project Showcase,7th,B
-Kathleen Singh,kathleen.singh@yahoo.com,227-123-413,Bangladesh University of Engineering and Technology,PARTICIPANT,Gaming,8th,D
-William Young,william.young@yahoo.com,204-161-920,Chittagong University of Engineering & Technology,PARTICIPANT,Hackathon,8th,E
-Corey Moss,corey.moss@student.edu.bd,20-63944-1,BRAC University,PARTICIPANT,Datathon,1st,E
-Betty Holland,betty.holland@example.com,212-143-412,University of Liberal Arts Bangladesh,PARTICIPANT,General,11th,F
-James Mcclure,james.mcclure@student.edu.bd,24-31337-2,University of Liberal Arts Bangladesh,PARTICIPANT,Hackathon,2nd,A
-Meghan Taylor,meghan.taylor@example.com,19-79499-3,East West University,PARTICIPANT,Datathon,12th,F
-David Cox,david.cox@yahoo.com,18-18540-2,Jahangirnagar University,PARTICIPANT,Programming Contest,8th,B
-Brian Smith,brian.smith@student.edu.bd,203-173-691,Southeast University,PARTICIPANT,Hackathon,1st,E
-Luis Macias,luis.macias@gmail.com,18-98139-3,Bangladesh University of Engineering and Technology,PARTICIPANT,General,2nd,F
-Matthew Summers,matthew.summers@student.edu.bd,220-127-767,Shahjalal University of Science and Technology,PARTICIPANT,Robotics,3rd,A
-Paul Gilbert,paul.gilbert@student.edu.bd,18-55050-3,Green University of Bangladesh,PARTICIPANT,Robotics,5th,B
-Stephen Rodriguez,stephen.rodriguez@yahoo.com,22-43357-3,University of Liberal Arts Bangladesh,PARTICIPANT,Gaming,8th,F
-Jennifer Howell MD,jennifer.howell.md@student.edu.bd,18-24802-3,United International University,PARTICIPANT,Gaming,4th,B
-Angela Curtis,angela.curtis@example.com,21-40939-2,Military Institute of Science and Technology,PARTICIPANT,General,9th,E
-Monica Baker,monica.baker@student.edu.bd,228-116-037,North South University,PARTICIPANT,Hackathon,9th,E
-Penny Mccoy,penny.mccoy@gmail.com,18-79580-1,Khulna University of Engineering & Technology,PARTICIPANT,Gaming,6th,C
-William Green,william.green@yahoo.com,206-141-488,Southeast University,PARTICIPANT,Project Showcase,12th,C
-David Miller,david.miller@yahoo.com,18-54029-3,Islamic University of Technology,PARTICIPANT,Hackathon,2nd,B
-Nicolas Howell,nicolas.howell@gmail.com,217-169-993,American International University-Bangladesh,PARTICIPANT,Robotics,3rd,A
-Tracy Bell,tracy.bell@gmail.com,230-199-215,United International University,PARTICIPANT,Hackathon,10th,C
-Melinda Ryan,melinda.ryan@gmail.com,218-143-513,Military Institute of Science and Technology,PARTICIPANT,Robotics,1st,C
-Rachel Gonzalez,rachel.gonzalez@student.edu.bd,229-151-107,East West University,PARTICIPANT,Programming Contest,5th,B
-Nicole Howard,nicole.howard@gmail.com,19-36405-2,Shahjalal University of Science and Technology,PARTICIPANT,General,3rd,C`;
+  const downloadSampleCsv = async (): Promise<void> => {
+    const csvContent = `name,email,studentId,university,role,category,semester,section\nStephanie Perez,stephanie.perez@yahoo.com,24-71529-2,"Independent University, Bangladesh",PARTICIPANT,Project Showcase,1st,C`;
     const filename = "Sample_Fest_Attendees.csv";
 
     if (Platform.OS === "web") {
@@ -122,7 +64,7 @@ Nicole Howard,nicole.howard@gmail.com,19-36405-2,Shahjalal University of Science
           });
           Alert.alert("Success ✅", "Sample CSV saved successfully!");
         }
-      } catch (error) {
+      } catch {
         Alert.alert("Error", "Failed to save file.");
       }
     } else {
@@ -135,33 +77,35 @@ Nicole Howard,nicole.howard@gmail.com,19-36405-2,Shahjalal University of Science
             UTI: "public.comma-separated-values-text",
           });
         }
-      } catch (error) {
+      } catch {
         Alert.alert("Error", "Failed to generate sample CSV.");
       }
     }
   };
 
-  const pickDocument = async () => {
+  const pickDocument = async (): Promise<void> => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
         type: "*/*",
         copyToCacheDirectory: true,
       });
       if (result.canceled) return;
-      if (!result.assets[0].name.toLowerCase().endsWith(".csv"))
-        return Alert.alert("Invalid File", "Select a valid .csv file.");
+      if (!result.assets[0].name.toLowerCase().endsWith(".csv")) {
+        Alert.alert("Invalid File", "Select a valid .csv file.");
+        return;
+      }
       await executeTwoPhaseUpload(result.assets[0]);
-    } catch (err) {
-      console.error("Picker Error:", err);
+    } catch {
+      Alert.alert("Error", "Failed to pick document.");
     }
   };
 
   const executeTwoPhaseUpload = async (
     file: DocumentPicker.DocumentPickerAsset,
-  ) => {
+  ): Promise<void> => {
     setStatus("uploading");
     setProgress(0);
-    let progressInterval = setInterval(
+    const progressInterval = setInterval(
       () => setProgress((prev) => Math.min(prev + 5, 95)),
       800,
     );
@@ -181,41 +125,31 @@ Nicole Howard,nicole.howard@gmail.com,19-36405-2,Shahjalal University of Science
         } as any);
       }
 
-      const uploadHeaders = await getAuthHeaders();
-      delete uploadHeaders["Content-Type"];
-
-      const uploadRes = await fetch(`${BASE_URL}/api/admin/upload`, {
-        method: "POST",
-        body: formData,
-        headers: uploadHeaders,
-      });
+      const uploadRes = await uploadFile("/admin/upload", formData);
       const data = await uploadRes.json();
       clearInterval(progressInterval);
 
       if (uploadRes.status === 409) {
         setStatus("idle");
-        return Alert.alert(
-          "Upload Skipped",
-          data.message || "Attendees exist.",
-        );
+        Alert.alert("Upload Skipped", data.message || "Attendees exist.");
+        return;
       }
-      if (!uploadRes.ok || !data.fileName)
+      if (!uploadRes.ok || !data.fileName) {
         throw new Error(data.error || "Failed to process CSV.");
+      }
 
       setInsertedCount(data.insertedCount || 0);
 
-      // Phase 2
       setStatus("downloading");
       setProgress(0);
-      const downloadUrl = `${BASE_URL}/api/admin/tickets/download-temp/${data.fileName}`;
-      const headers = await getAuthHeaders();
 
       if (Platform.OS === "web") {
-        const pdfRes = await fetch(downloadUrl, {
-          method: "GET",
-          headers,
-          credentials: "include",
-        });
+        const pdfRes = await apiClient(
+          `/admin/tickets/download-temp/${data.fileName}`,
+          {
+            method: "GET",
+          },
+        );
         const blob = await pdfRes.blob();
         const linkSource = URL.createObjectURL(blob);
         const downloadLink = document.createElement("a");
@@ -224,18 +158,28 @@ Nicole Howard,nicole.howard@gmail.com,19-36405-2,Shahjalal University of Science
         downloadLink.click();
         setPdfUri(linkSource);
       } else {
+        const downloadUrl = `${API_URL}/admin/tickets/download-temp/${data.fileName}`;
         const destFile = new File(Paths.document, data.fileName);
+
+        const token = await SecureStore.getItemAsync(
+          "better-auth.session_token",
+        );
+        const headers: Record<string, string> = token
+          ? { Authorization: `Bearer ${token}` }
+          : {};
+
         const downloadResumable = FileSystemLegacy.createDownloadResumable(
           downloadUrl,
           destFile.uri,
           { headers },
           (ev) => {
-            if (ev.totalBytesExpectedToWrite > 0)
+            if (ev.totalBytesExpectedToWrite > 0) {
               setProgress(
                 Math.round(
                   (ev.totalBytesWritten / ev.totalBytesExpectedToWrite) * 100,
                 ),
               );
+            }
           },
         );
         await downloadResumable.downloadAsync();
@@ -244,15 +188,21 @@ Nicole Howard,nicole.howard@gmail.com,19-36405-2,Shahjalal University of Science
 
       onAttendeesUpdated();
       setStatus("success");
-    } catch (error: any) {
+    } catch (error) {
       clearInterval(progressInterval);
       setStatus("error");
-      Alert.alert("Process Failed", error.message);
+      Alert.alert(
+        "Process Failed",
+        error instanceof Error ? error.message : "Unknown error",
+      );
     }
   };
 
-  const sharePdf = async () => {
-    if (!pdfUri) return Alert.alert("Error", "PDF file could not be located.");
+  const sharePdf = async (): Promise<void> => {
+    if (!pdfUri) {
+      Alert.alert("Error", "PDF file could not be located.");
+      return;
+    }
     if (Platform.OS === "web") {
       const link = document.createElement("a");
       link.href = pdfUri;
@@ -267,23 +217,25 @@ Nicole Howard,nicole.howard@gmail.com,19-36405-2,Shahjalal University of Science
           { mimeType: "application/pdf", UTI: "com.adobe.pdf" },
         );
       }
-    } catch (error: any) {
-      Alert.alert("Share Error", error.message);
+    } catch (error) {
+      Alert.alert(
+        "Share Error",
+        error instanceof Error ? error.message : "Unknown error",
+      );
     }
   };
 
-  // 🔴 FIX: Upgraded to use the unified progress bar and tracking callbacks
-  const redownloadAllTickets = async () => {
+  const redownloadAllTickets = async (): Promise<void> => {
     setStatus("downloading");
     setProgress(0);
 
     try {
-      const headers = await getAuthHeaders();
-      const endpoint = `${BASE_URL}/api/admin/tickets/download-all`;
       const filename = `All_Fest_Tickets_Backup_${Date.now()}.pdf`;
 
       if (Platform.OS === "web") {
-        const res = await fetch(endpoint, { method: "GET", headers });
+        const res = await apiClient("/admin/tickets/download-all", {
+          method: "GET",
+        });
         if (!res.ok) throw new Error("Failed to generate PDF.");
         setProgress(100);
         const blob = await res.blob();
@@ -292,7 +244,14 @@ Nicole Howard,nicole.howard@gmail.com,19-36405-2,Shahjalal University of Science
         link.download = filename;
         link.click();
       } else {
+        const endpoint = `${API_URL}/admin/tickets/download-all`;
         const destFile = new File(Paths.document, filename);
+        const token = await SecureStore.getItemAsync(
+          "better-auth.session_token",
+        );
+        const headers: Record<string, string> = token
+          ? { Authorization: `Bearer ${token}` }
+          : {};
 
         const downloadResumable = FileSystemLegacy.createDownloadResumable(
           endpoint,
@@ -318,10 +277,12 @@ Nicole Howard,nicole.howard@gmail.com,19-36405-2,Shahjalal University of Science
           });
         }
       }
-    } catch (error: any) {
-      Alert.alert("Download Failed", error.message);
+    } catch (error) {
+      Alert.alert(
+        "Download Failed",
+        error instanceof Error ? error.message : "Unknown error",
+      );
     } finally {
-      // Revert back to the form UI once done
       setStatus("idle");
     }
   };
@@ -428,7 +389,6 @@ Nicole Howard,nicole.howard@gmail.com,19-36405-2,Shahjalal University of Science
 
       {status === "idle" && (
         <>
-          {/* 🔴 FIX: Upgraded to a professional solid-bordered guide card */}
           <View
             style={[
               styles.guideCard,
@@ -465,7 +425,6 @@ Nicole Howard,nicole.howard@gmail.com,19-36405-2,Shahjalal University of Science
             </TouchableOpacity>
           </View>
 
-          {/* 🔴 FIX: Cleaned up dropzone text and spacing */}
           <TouchableOpacity
             style={[
               styles.dropzone,
@@ -560,7 +519,6 @@ const styles = StyleSheet.create({
   },
   progressBarFill: { height: "100%", borderRadius: 4 },
 
-  // 🔴 NEW: Solid professional guide card
   guideCard: {
     padding: 16,
     borderRadius: SIZES.radius,

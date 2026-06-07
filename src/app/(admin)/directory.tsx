@@ -1,6 +1,6 @@
-import AttendeeCard from "@/components/admin/directory/AttendeeCard";
-import DirectoryFilters from "@/components/admin/directory/DirectoryFilters";
-import DirectoryModals from "@/components/admin/directory/DirectoryModals";
+import AttendeeCard from "@/components/directory/AttendeeCard";
+import DirectoryFilters from "@/components/directory/DirectoryFilters";
+import DirectoryModals from "@/components/directory/DirectoryModals";
 import { FONTS, SIZES } from "@/constants/theme";
 import { useTheme } from "@/hooks/use-theme";
 import { apiClient } from "@/utils/apiClient";

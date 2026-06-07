@@ -1,8 +1,5 @@
-import { FONTS, SIZES } from "@/constants/theme";
-import { useTheme } from "@/hooks/use-theme";
 import { Feather } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";
-import * as SecureStore from "expo-secure-store";
 import React, { useCallback, useState } from "react";
 import {
   ActivityIndicator,
@@ -15,53 +12,36 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { FONTS, SIZES } from "../../constants/theme";
+import { useTheme } from "../../hooks/use-theme";
+import { VolunteerListItem } from "../../types";
+import { apiClient } from "../../utils/apiClient";
+import { EmptyState } from "../ui/EmptyState";
 
-const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
-
-// 🔴 UPDATED: Matched interface to the new backend grouping API
-interface Volunteer {
-  id: string;
-  name: string;
-  email: string;
-  createdAt: string;
-  stats: {
-    total: number;
-    success: number;
-    duplicate: number;
-    invalid: number;
-  };
-}
-
-export default function VolunteerList() {
+export default function VolunteerList(): React.ReactElement {
   const theme = useTheme();
-  const [volunteers, setVolunteers] = useState<Volunteer[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [volunteers, setVolunteers] = useState<VolunteerListItem[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [errorState, setErrorState] = useState<string | null>(null);
 
-  const [modalVisible, setModalVisible] = useState(false);
+  const [modalVisible, setModalVisible] = useState<boolean>(false);
   const [form, setForm] = useState({ name: "", email: "", password: "" });
-  const [showPassword, setShowPassword] = useState(false);
+  const [showPassword, setShowPassword] = useState<boolean>(false);
 
-  const fetchWithAuth = async (endpoint: string, options: RequestInit = {}) => {
-    const token = await SecureStore.getItemAsync("better-auth.session_token");
-    const headers: any = {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      ...(Platform.OS !== "web" ? { Origin: BASE_URL || "" } : {}),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...options.headers,
-    };
-    return fetch(`${BASE_URL}${endpoint}`, { ...options, headers });
-  };
-
-  const fetchVolunteers = async () => {
+  const fetchVolunteers = async (): Promise<void> => {
     setIsLoading(true);
+    setErrorState(null);
     try {
-      const res = await fetchWithAuth("/api/admin/volunteers");
+      const res = await apiClient("/admin/volunteers");
       const json = await res.json();
-      if (json.success && Array.isArray(json.data)) setVolunteers(json.data);
-    } catch {
-      /* silent */
+      if (res.ok && Array.isArray(json.data)) {
+        setVolunteers(json.data);
+      } else {
+        throw new Error("Failed to fetch volunteers");
+      }
+    } catch (err) {
+      setErrorState(err instanceof Error ? err.message : "Network Error");
     } finally {
       setIsLoading(false);
     }
@@ -73,12 +53,14 @@ export default function VolunteerList() {
     }, []),
   );
 
-  const handleAddVolunteer = async () => {
-    if (!form.name || !form.email || !form.password)
-      return Alert.alert("Missing Fields", "Please fill out all fields.");
+  const handleAddVolunteer = async (): Promise<void> => {
+    if (!form.name || !form.email || !form.password) {
+      Alert.alert("Missing Fields", "Please fill out all fields.");
+      return;
+    }
     setActionLoading("ADD_VOLUNTEER");
     try {
-      const res = await fetchWithAuth("/api/admin/volunteers", {
+      const res = await apiClient("/admin/volunteers", {
         method: "POST",
         body: JSON.stringify(form),
       });
@@ -89,14 +71,17 @@ export default function VolunteerList() {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.message || "Failed to add volunteer.");
       }
-    } catch (error: any) {
-      Alert.alert("Error", error.message);
+    } catch (error) {
+      Alert.alert(
+        "Error",
+        error instanceof Error ? error.message : "Unknown error",
+      );
     } finally {
       setActionLoading(null);
     }
   };
 
-  const handleDeleteVolunteer = (id: string, name: string) => {
+  const handleDeleteVolunteer = (id: string, name: string): void => {
     Alert.alert(
       "Remove Volunteer",
       `Are you sure you want to remove ${name}?`,
@@ -108,14 +93,19 @@ export default function VolunteerList() {
           onPress: async () => {
             setActionLoading(`DELETE_${id}`);
             try {
-              const res = await fetchWithAuth(`/api/admin/volunteers/${id}`, {
+              const res = await apiClient(`/admin/volunteers/${id}`, {
                 method: "DELETE",
               });
-              if (res.ok)
+              if (res.ok) {
                 setVolunteers((prev) => prev.filter((v) => v.id !== id));
-              else throw new Error("Failed to delete volunteer.");
-            } catch (error: any) {
-              Alert.alert("Error", error.message);
+              } else {
+                throw new Error("Failed to delete volunteer.");
+              }
+            } catch (error) {
+              Alert.alert(
+                "Error",
+                error instanceof Error ? error.message : "Unknown error",
+              );
             } finally {
               setActionLoading(null);
             }
@@ -125,7 +115,7 @@ export default function VolunteerList() {
     );
   };
 
-  const closeModal = () => {
+  const closeModal = (): void => {
     setModalVisible(false);
     setForm({ name: "", email: "", password: "" });
     setShowPassword(false);
@@ -152,6 +142,8 @@ export default function VolunteerList() {
           color={theme.primary}
           style={styles.loader}
         />
+      ) : errorState ? (
+        <EmptyState icon="alert-octagon" message={errorState} />
       ) : volunteers.length === 0 ? (
         <View style={[styles.emptyCard, { backgroundColor: theme.surface }]}>
           <Text style={{ color: theme.textMuted, ...FONTS.body }}>
@@ -175,56 +167,7 @@ export default function VolunteerList() {
                 {vol.email}
               </Text>
 
-              {/* 🔴 UPDATED: Detailed Stats Row */}
               <View style={styles.statsRow}>
-                <View
-                  style={[
-                    styles.statBadge,
-                    { backgroundColor: `${theme.success}15` },
-                  ]}
-                >
-                  <Feather
-                    name="check"
-                    size={12}
-                    color={theme.success}
-                    style={{ marginRight: 4 }}
-                  />
-                  <Text style={[styles.statText, { color: theme.success }]}>
-                    {vol.stats.success}
-                  </Text>
-                </View>
-
-                <View
-                  style={[styles.statBadge, { backgroundColor: "#FEF3C7" }]}
-                >
-                  <Feather
-                    name="copy"
-                    size={12}
-                    color="#D97706"
-                    style={{ marginRight: 4 }}
-                  />
-                  <Text style={[styles.statText, { color: "#D97706" }]}>
-                    {vol.stats.duplicate}
-                  </Text>
-                </View>
-
-                <View
-                  style={[
-                    styles.statBadge,
-                    { backgroundColor: `${theme.error}15` },
-                  ]}
-                >
-                  <Feather
-                    name="x"
-                    size={12}
-                    color={theme.error}
-                    style={{ marginRight: 4 }}
-                  />
-                  <Text style={[styles.statText, { color: theme.error }]}>
-                    {vol.stats.invalid}
-                  </Text>
-                </View>
-
                 <View
                   style={[
                     styles.statBadge,
@@ -235,8 +178,8 @@ export default function VolunteerList() {
                   ]}
                 >
                   <Text style={[styles.statText, { color: theme.textMuted }]}>
-                    Total:{" "}
-                    <Text style={{ fontWeight: "800" }}>{vol.stats.total}</Text>
+                    Total Scans:{" "}
+                    <Text style={{ fontWeight: "800" }}>{vol.totalScans}</Text>
                   </Text>
                 </View>
               </View>
@@ -257,7 +200,6 @@ export default function VolunteerList() {
         ))
       )}
 
-      {/* MODAL */}
       <Modal
         visible={modalVisible}
         transparent={true}
@@ -396,8 +338,6 @@ const styles = StyleSheet.create({
   volInfo: { flex: 1 },
   volName: { ...FONTS.body, fontWeight: "700", fontSize: 16, marginBottom: 4 },
   volEmail: { ...FONTS.muted, fontSize: 13, marginBottom: 12 },
-
-  // 🔴 NEW STYLES for the stats row
   statsRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -416,7 +356,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "600",
   },
-
   deleteBtn: { padding: 8 },
   modalOverlay: {
     flex: 1,

@@ -1,3 +1,7 @@
+import { FONTS, SIZES } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
+import { AttendeeListItem } from "@/types";
+import { formatDateTime } from "@/utils/formatDate";
 import { Feather } from "@expo/vector-icons";
 import React from "react";
 import {
@@ -8,10 +12,6 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { FONTS, SIZES } from "../../../constants/theme";
-import { useTheme } from "../../../hooks/use-theme";
-import { AttendeeListItem } from "../../../types";
-import { formatDateTime } from "../../../utils/formatDate";
 
 export interface ErrorModalInfo {
   type: string;

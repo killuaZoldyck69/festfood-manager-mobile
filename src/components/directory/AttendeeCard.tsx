@@ -1,9 +1,9 @@
+import { FONTS } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
+import { AttendeeListItem } from "@/types";
+import { formatTime } from "@/utils/formatDate";
 import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { FONTS } from "../../../constants/theme";
-import { useTheme } from "../../../hooks/use-theme";
-import { AttendeeListItem } from "../../../types";
-import { formatTime } from "../../../utils/formatDate";
 
 interface AttendeeCardProps {
   item: AttendeeListItem;
