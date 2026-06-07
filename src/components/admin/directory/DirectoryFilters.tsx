@@ -1,5 +1,3 @@
-import { FONTS, SIZES } from "@/constants/theme";
-import { useTheme } from "@/hooks/use-theme";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import React, { useState } from "react";
 import {
@@ -10,17 +8,24 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { FONTS, SIZES } from "../../../constants/theme";
+import { useTheme } from "../../../hooks/use-theme";
+
+export interface DirectoryFilterAggregation {
+  categories: { name: string; count: number }[];
+  universities: { name: string; count: number }[];
+}
 
 interface FilterProps {
   searchQuery: string;
   setSearchQuery: (val: string) => void;
   activeTab: string;
-  setActiveTab: (val: any) => void;
+  setActiveTab: (val: string) => void;
   selectedCategory: string;
   setSelectedCategory: (val: string) => void;
   selectedUniversity: string;
   setSelectedUniversity: (val: string) => void;
-  filterOptions: { categories: any[]; universities: any[] };
+  filterOptions: DirectoryFilterAggregation;
   clearFilters: () => void;
 }
 
@@ -35,12 +40,11 @@ export default function DirectoryFilters({
   setSelectedUniversity,
   filterOptions,
   clearFilters,
-}: FilterProps) {
+}: FilterProps): React.ReactElement {
   const theme = useTheme();
 
-  // Local UI State (Does not trigger parent re-renders)
-  const [showAdvanced, setShowAdvanced] = useState(false);
-  const [isUniDropdownOpen, setIsUniDropdownOpen] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState<boolean>(false);
+  const [isUniDropdownOpen, setIsUniDropdownOpen] = useState<boolean>(false);
 
   const hasActiveFilters =
     selectedCategory !== "ALL" ||
@@ -277,7 +281,6 @@ export default function DirectoryFilters({
         </View>
       )}
 
-      {/* TABS */}
       <View style={styles.tabsWrapper}>
         <ScrollView
           horizontal

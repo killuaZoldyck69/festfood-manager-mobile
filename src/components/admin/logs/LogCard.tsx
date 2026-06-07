@@ -1,43 +1,15 @@
-import { FONTS, SIZES } from "@/constants/theme";
-import { useTheme } from "@/hooks/use-theme";
 import { Feather } from "@expo/vector-icons";
 import React from "react";
-import { Platform, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
+import { AppTheme, FONTS, SIZES } from "../../../constants/theme";
+import { useTheme } from "../../../hooks/use-theme";
+import { FormattedLog } from "../../../types";
+import { formatDate, formatTime } from "../../../utils/formatDate";
 
-export interface ScanLog {
-  id: string;
-  status: string;
-  scannedToken: string;
-  scannedAt: string;
-  volunteerName: string;
-  attendeeName: string | null;
-  volunteerRole?: string | null;
-  attendeeUniversity?: string | null;
-  attendeeCategory?: string | null;
-  attendeeEmail?: string | null;
-  attendeeStudentId?: string | null;
-  // 🔴 NEW: Added explicit typings for semester and section
-  attendeeSemester?: string | null;
-  attendeeSection?: string | null;
-}
-
-const formatTime = (isoString: string) => {
-  const date = new Date(isoString);
-  return date.toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true,
-  });
-};
-
-const formatDate = (isoString: string) => {
-  return new Date(isoString).toLocaleDateString([], {
-    month: "short",
-    day: "numeric",
-  });
-};
-
-const getStatusVisuals = (status: string, theme: any) => {
+const getStatusVisuals = (
+  status: string,
+  theme: AppTheme,
+): { color: string; icon: string; bg: string } => {
   const normalizedStatus = status.toUpperCase();
   if (
     normalizedStatus.includes("DUPLICATE") ||
@@ -62,7 +34,11 @@ const getStatusVisuals = (status: string, theme: any) => {
   };
 };
 
-const LogCard = React.memo(({ item }: { item: ScanLog }) => {
+interface LogCardProps {
+  item: FormattedLog;
+}
+
+const LogCard = React.memo(({ item }: LogCardProps): React.ReactElement => {
   const theme = useTheme();
   const visual = getStatusVisuals(item.status, theme);
 
@@ -91,64 +67,6 @@ const LogCard = React.memo(({ item }: { item: ScanLog }) => {
           >
             {item.attendeeName || "Unknown / Invalid Token"}
           </Text>
-
-          {item.attendeeStudentId && (
-            <Text
-              style={[styles.traceText, { color: theme.textMuted }]}
-              numberOfLines={1}
-            >
-              ID: {item.attendeeStudentId}
-            </Text>
-          )}
-
-          {/* 🔴 NEW: Render Semester & Section */}
-          {(item.attendeeSemester || item.attendeeSection) && (
-            <Text
-              style={[styles.traceText, { color: theme.textMuted }]}
-              numberOfLines={1}
-            >
-              Sem: {item.attendeeSemester || "N/A"} | Sec:{" "}
-              {item.attendeeSection || "N/A"}
-            </Text>
-          )}
-
-          {item.attendeeEmail && (
-            <Text
-              style={[
-                styles.traceText,
-                { color: theme.textMuted, marginBottom: 4 },
-              ]}
-              numberOfLines={1}
-            >
-              {item.attendeeEmail}
-            </Text>
-          )}
-
-          <Text
-            style={[styles.attendeeUniversity, { color: theme.textMuted }]}
-            numberOfLines={1}
-          >
-            {item.attendeeUniversity || "Missing Info"}
-          </Text>
-          <View style={styles.metaRow}>
-            {item.attendeeCategory && (
-              <View
-                style={[
-                  styles.categoryBadge,
-                  { backgroundColor: `${theme.primary}15` },
-                ]}
-              >
-                <Text
-                  style={[styles.categoryBadgeText, { color: theme.primary }]}
-                >
-                  {item.attendeeCategory}
-                </Text>
-              </View>
-            )}
-          </View>
-          {/* <Text style={[styles.tokenText, { color: theme.textMuted }]}>
-            Token: {item.scannedToken.substring(0, 8).toUpperCase()}...
-          </Text> */}
         </View>
 
         <View style={styles.divider} />
@@ -163,33 +81,6 @@ const LogCard = React.memo(({ item }: { item: ScanLog }) => {
           >
             {item.volunteerName || "System"}
           </Text>
-          {item.volunteerRole && (
-            <View
-              style={[
-                styles.roleBadge,
-                {
-                  backgroundColor:
-                    item.volunteerRole === "ADMIN"
-                      ? `${theme.primary}15`
-                      : `${theme.success}15`,
-                },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.roleBadgeText,
-                  {
-                    color:
-                      item.volunteerRole === "ADMIN"
-                        ? theme.primary
-                        : theme.success,
-                  },
-                ]}
-              >
-                {item.volunteerRole}
-              </Text>
-            </View>
-          )}
         </View>
       </View>
     </View>
@@ -235,7 +126,6 @@ const styles = StyleSheet.create({
   timeText: { ...FONTS.body, fontSize: 12, fontWeight: "500" },
   logBody: { flexDirection: "row", paddingTop: 2 },
   participantInfo: { flex: 1.3, justifyContent: "flex-start" },
-  traceText: { ...FONTS.body, fontSize: 13, fontWeight: "500", lineHeight: 17 },
   scannerInfo: { flex: 0.9, paddingLeft: 12, justifyContent: "flex-start" },
   divider: { width: 1, backgroundColor: "#E2E8F0", marginHorizontal: 6 },
   label: {
@@ -250,37 +140,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "700",
     marginBottom: 2,
-  },
-  attendeeUniversity: { ...FONTS.muted, fontSize: 12, marginBottom: 8 },
-  metaRow: { flexDirection: "row", alignItems: "center", marginBottom: 8 },
-  categoryBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 4,
-    borderRadius: 6,
-    marginRight: 8,
-  },
-  categoryBadgeText: {
-    ...FONTS.body,
-    fontSize: 9,
-    fontWeight: "800",
-    textTransform: "uppercase",
-  },
-  roleBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    alignSelf: "flex-start",
-    marginTop: 6,
-  },
-  roleBadgeText: {
-    ...FONTS.body,
-    fontSize: 10,
-    fontWeight: "800",
-    textTransform: "uppercase",
-  },
-  tokenText: {
-    ...FONTS.body,
-    fontSize: 11,
-    fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
   },
 });

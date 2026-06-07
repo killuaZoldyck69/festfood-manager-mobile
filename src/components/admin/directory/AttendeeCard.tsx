@@ -1,25 +1,22 @@
-import { FONTS } from "@/constants/theme";
-import { useTheme } from "@/hooks/use-theme";
 import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { FONTS } from "../../../constants/theme";
+import { useTheme } from "../../../hooks/use-theme";
+import { AttendeeListItem } from "../../../types";
+import { formatTime } from "../../../utils/formatDate";
 
 interface AttendeeCardProps {
-  item: any;
-  onSelect: (item: any) => void;
-  onManualClaim: (item: any) => void;
+  item: AttendeeListItem;
+  onSelect: (item: AttendeeListItem) => void;
+  onManualClaim: (item: AttendeeListItem) => void;
 }
 
-const formatTime = (isoString: string | null) => {
-  if (!isoString) return "";
-  return new Date(isoString).toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true,
-  });
-};
-
 const AttendeeCard = React.memo(
-  ({ item, onSelect, onManualClaim }: AttendeeCardProps) => {
+  ({
+    item,
+    onSelect,
+    onManualClaim,
+  }: AttendeeCardProps): React.ReactElement => {
     const theme = useTheme();
     const isClaimed = item.foodClaimed;
 
@@ -51,7 +48,6 @@ const AttendeeCard = React.memo(
               ID: {item.studentId}
             </Text>
 
-            {/* 🔴 NEW: Semester & Section (Defensive Render) */}
             {(item.semester || item.section) && (
               <Text
                 style={[styles.traceText, { color: theme.textMuted }]}
@@ -84,7 +80,7 @@ const AttendeeCard = React.memo(
           </View>
         </View>
 
-        {isClaimed ? (
+        {isClaimed && item.claimedAt ? (
           <Text style={[styles.timeText, { color: theme.textMuted }]}>
             {formatTime(item.claimedAt)}
           </Text>

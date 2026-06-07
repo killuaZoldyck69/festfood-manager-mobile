@@ -1,5 +1,3 @@
-import { FONTS, SIZES } from "@/constants/theme";
-import { useTheme } from "@/hooks/use-theme";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import React, { useState } from "react";
 import {
@@ -10,6 +8,8 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { FONTS, SIZES } from "../../../constants/theme";
+import { useTheme } from "../../../hooks/use-theme";
 
 export type FilterTab =
   | "ALL"
@@ -17,6 +17,11 @@ export type FilterTab =
   | "DUPLICATE"
   | "INVALID"
   | "MANUAL_OVERRIDE";
+
+export interface LogFilterAggregation {
+  categories: { name: string; count: number }[];
+  volunteers: { name: string; email?: string; count: number }[];
+}
 
 interface LogFiltersProps {
   searchQuery: string;
@@ -27,7 +32,7 @@ interface LogFiltersProps {
   setSelectedCategory: (val: string) => void;
   selectedVolunteerEmail: string;
   setSelectedVolunteerEmail: (val: string) => void;
-  filterOptions: { categories: any[]; volunteers: any[] };
+  filterOptions: LogFilterAggregation;
   clearFilters: () => void;
 }
 
@@ -42,11 +47,11 @@ export default function LogFilters({
   setSelectedVolunteerEmail,
   filterOptions,
   clearFilters,
-}: LogFiltersProps) {
+}: LogFiltersProps): React.ReactElement {
   const theme = useTheme();
 
-  const [showAdvanced, setShowAdvanced] = useState(false);
-  const [isVolDropdownOpen, setIsVolDropdownOpen] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState<boolean>(false);
+  const [isVolDropdownOpen, setIsVolDropdownOpen] = useState<boolean>(false);
 
   const hasActiveFilters =
     selectedCategory !== "ALL" ||
@@ -170,7 +175,6 @@ export default function LogFilters({
                     isCatActive && { backgroundColor: theme.primary },
                   ]}
                   onPress={() => {
-                    // 🔴 FIX 2: Internal Guard Clause
                     if (!isCatActive) setSelectedCategory(cat.name);
                   }}
                 >
@@ -264,7 +268,6 @@ export default function LogFilters({
                         },
                       ]}
                       onPress={() => {
-                        // 🔴 FIX 2: Internal Guard Clause
                         if (!isVolActive) {
                           setSelectedVolunteerEmail(vol.email || "ALL");
                         }
@@ -317,7 +320,6 @@ export default function LogFilters({
                   isActive && { backgroundColor: `${tab.activeColor}15` },
                 ]}
                 onPress={() => {
-                  // 🔴 FIX 2: Internal Guard Clause
                   if (!isActive) setActiveTab(tab.id as FilterTab);
                 }}
               >

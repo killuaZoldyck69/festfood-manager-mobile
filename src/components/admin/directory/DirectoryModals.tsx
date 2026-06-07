@@ -1,5 +1,3 @@
-import { FONTS, SIZES } from "@/constants/theme";
-import { useTheme } from "@/hooks/use-theme";
 import { Feather } from "@expo/vector-icons";
 import React from "react";
 import {
@@ -10,22 +8,26 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { FONTS, SIZES } from "../../../constants/theme";
+import { useTheme } from "../../../hooks/use-theme";
+import { AttendeeListItem } from "../../../types";
+import { formatDateTime } from "../../../utils/formatDate";
 
-interface ModalsProps {
-  selectedAttendee: any;
-  setSelectedAttendee: (val: any) => void;
-  claimConfirmAttendee: any;
-  setClaimConfirmAttendee: (val: any) => void;
-  errorModalInfo: any;
-  setErrorModalInfo: (val: any) => void;
-  handleManualClaim: () => void;
+export interface ErrorModalInfo {
+  type: string;
+  title: string;
+  message: string;
 }
 
-const formatDateTime = (isoString: string | null) => {
-  if (!isoString) return "Unknown Date";
-  const date = new Date(isoString);
-  return `${date.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })} at ${date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: true })}`;
-};
+interface ModalsProps {
+  selectedAttendee: AttendeeListItem | null;
+  setSelectedAttendee: (val: AttendeeListItem | null) => void;
+  claimConfirmAttendee: AttendeeListItem | null;
+  setClaimConfirmAttendee: (val: AttendeeListItem | null) => void;
+  errorModalInfo: ErrorModalInfo | null;
+  setErrorModalInfo: (val: ErrorModalInfo | null) => void;
+  handleManualClaim: () => void;
+}
 
 export default function DirectoryModals({
   selectedAttendee,
@@ -35,12 +37,11 @@ export default function DirectoryModals({
   errorModalInfo,
   setErrorModalInfo,
   handleManualClaim,
-}: ModalsProps) {
+}: ModalsProps): React.ReactElement {
   const theme = useTheme();
 
   return (
     <>
-      {/* 1. Confirmation Modal */}
       <Modal
         animationType="fade"
         transparent
@@ -96,7 +97,6 @@ export default function DirectoryModals({
         </View>
       </Modal>
 
-      {/* 2. Error Modal */}
       <Modal
         animationType="fade"
         transparent
@@ -168,7 +168,6 @@ export default function DirectoryModals({
         </View>
       </Modal>
 
-      {/* 3. Details Modal */}
       <Modal
         animationType="slide"
         transparent
@@ -249,7 +248,6 @@ export default function DirectoryModals({
                   ID: {selectedAttendee.studentId}
                 </Text>
 
-                {/* Dynamically adjust bottom margin based on whether semester/section exists */}
                 <Text
                   style={[
                     styles.traceText,
@@ -266,7 +264,6 @@ export default function DirectoryModals({
                   {selectedAttendee.email}
                 </Text>
 
-                {/* 🔴 NEW: Semester & Section */}
                 {(selectedAttendee.semester || selectedAttendee.section) && (
                   <Text
                     style={[
@@ -343,39 +340,37 @@ export default function DirectoryModals({
                     </View>
                   </View>
 
-                  {selectedAttendee.foodClaimed && (
-                    <View style={styles.auditNode}>
-                      <View style={styles.auditTimeline}>
-                        <View
-                          style={[
-                            styles.auditDot,
-                            { backgroundColor: theme.primary },
-                          ]}
-                        />
-                      </View>
-                      <View style={styles.auditDetails}>
-                        <Text
-                          style={[styles.auditTime, { color: theme.textMain }]}
-                        >
-                          {formatDateTime(selectedAttendee.claimedAt)}
-                        </Text>
-                        <Text
-                          style={[styles.auditDesc, { color: theme.textMuted }]}
-                        >
-                          Scanned by{" "}
-                          {selectedAttendee.scannerRole === "ADMIN"
-                            ? "Admin"
-                            : "Volunteer"}
-                          :{" "}
+                  {selectedAttendee.foodClaimed &&
+                    selectedAttendee.claimedAt && (
+                      <View style={styles.auditNode}>
+                        <View style={styles.auditTimeline}>
+                          <View
+                            style={[
+                              styles.auditDot,
+                              { backgroundColor: theme.primary },
+                            ]}
+                          />
+                        </View>
+                        <View style={styles.auditDetails}>
                           <Text
-                            style={{ color: theme.primary, fontWeight: "600" }}
+                            style={[
+                              styles.auditTime,
+                              { color: theme.textMain },
+                            ]}
                           >
-                            {selectedAttendee.scannerName || "System"}
+                            {formatDateTime(selectedAttendee.claimedAt)}
                           </Text>
-                        </Text>
+                          <Text
+                            style={[
+                              styles.auditDesc,
+                              { color: theme.textMuted },
+                            ]}
+                          >
+                            Ticket scanned and claimed.
+                          </Text>
+                        </View>
                       </View>
-                    </View>
-                  )}
+                    )}
                 </View>
               </>
             )}
