@@ -1,8 +1,11 @@
-import React, { useState } from "react";
-import { SafeAreaView, StyleSheet, Text, View } from "react-native";
+import React, { useEffect, useState } from "react";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import AttendeeCard from "@/components/directory/AttendeeCard";
-import DirectoryFilters from "@/components/directory/DirectoryFilters";
+import DirectoryFilters, {
+  DirectoryFilterAggregation,
+} from "@/components/directory/DirectoryFilters";
 import DirectoryModals, {
   ErrorModalInfo,
 } from "@/components/directory/DirectoryModals";
@@ -21,6 +24,27 @@ export default function AdminDirectoryScreen(): React.ReactElement {
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [selectedCategory, setSelectedCategory] = useState<string>("ALL");
   const [selectedUniversity, setSelectedUniversity] = useState<string>("ALL");
+  const [filterOptions, setFilterOptions] =
+    useState<DirectoryFilterAggregation>({
+      categories: [],
+      universities: [],
+    });
+
+  useEffect(() => {
+    const fetchFilters = async () => {
+      try {
+        const response = await apiClient("/admin/attendees/filters");
+        if (response.ok) {
+          const json = await response.json();
+          setFilterOptions(json.data || json);
+        }
+      } catch (err) {
+        // Silently fail and leave options empty if the network request drops
+      }
+    };
+
+    fetchFilters();
+  }, []);
 
   const params: Record<string, string> = {
     ...(activeTab !== "ALL" && { status: activeTab }),
@@ -86,7 +110,7 @@ export default function AdminDirectoryScreen(): React.ReactElement {
           Attendee Directory
         </Text>
         <Text style={[styles.totalLogs, { color: theme.textMuted }]}>
-          {meta.total} Registered
+          {meta?.total || 0} Registered
         </Text>
       </View>
 
@@ -100,7 +124,7 @@ export default function AdminDirectoryScreen(): React.ReactElement {
           setSelectedCategory={setSelectedCategory}
           selectedUniversity={selectedUniversity}
           setSelectedUniversity={setSelectedUniversity}
-          filterOptions={{ categories: [], universities: [] }} // Hook/Context needed for filter source
+          filterOptions={filterOptions}
           clearFilters={() => {
             setSearchQuery("");
             setSelectedCategory("ALL");
@@ -116,7 +140,11 @@ export default function AdminDirectoryScreen(): React.ReactElement {
         ) : data.length === 0 ? (
           <EmptyState icon="users" message="No attendees found." />
         ) : (
-          <View style={styles.list}>
+          <ScrollView
+            style={styles.list}
+            contentContainerStyle={{ paddingBottom: 40 }}
+            showsVerticalScrollIndicator={false}
+          >
             {data.map((item) => (
               <AttendeeCard
                 key={item.id}
@@ -131,7 +159,7 @@ export default function AdminDirectoryScreen(): React.ReactElement {
               onPrev={() => fetch(meta.page - 1)}
               onNext={() => fetch(meta.page + 1)}
             />
-          </View>
+          </ScrollView>
         )}
       </View>
 
