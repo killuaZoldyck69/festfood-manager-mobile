@@ -2,7 +2,7 @@ import { Feather } from "@expo/vector-icons";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
+  Modal,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -22,73 +22,40 @@ export default function DangerZone({
   const theme = useTheme();
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  const handleResetLogistics = (): void => {
-    Alert.alert(
-      "⚠️ Reset Inventory",
-      "This will reset all inventory counts to zero. Are you absolutely sure?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Reset Inventory",
-          style: "destructive",
-          onPress: async () => {
-            setActionLoading("RESET_LOGISTICS");
-            try {
-              const res = await apiClient("/admin/logistics/reset", {
-                method: "POST",
-              });
-              if (res.ok) {
-                Alert.alert("Success", "Inventory has been reset to zero.");
-              } else {
-                throw new Error("Failed to reset inventory.");
-              }
-            } catch (error) {
-              Alert.alert(
-                "Error",
-                error instanceof Error ? error.message : "Unknown error",
-              );
-            } finally {
-              setActionLoading(null);
-            }
-          },
-        },
-      ],
-    );
-  };
+  // Modal State
+  const [modalConfig, setModalConfig] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    actionType: "RESET_LOGISTICS" | "WIPE_ATTENDEES" | null;
+  }>({ visible: false, title: "", message: "", actionType: null });
 
-  const handleWipeAttendees = (): void => {
-    Alert.alert(
-      "☢️ WIPE ALL ATTENDEES",
-      "CRITICAL WARNING: This deletes ALL attendees and scan logs. Proceed?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "WIPE DATABASE",
-          style: "destructive",
-          onPress: async () => {
-            setActionLoading("WIPE_ATTENDEES");
-            try {
-              const res = await apiClient("/admin/attendees/wipe", {
-                method: "DELETE",
-              });
-              if (res.ok) {
-                Alert.alert("Wiped", "All attendee data has been eradicated.");
-                onAttendeesWiped();
-              } else {
-                throw new Error("Failed to wipe attendees.");
-              }
-            } catch (error) {
-              Alert.alert(
-                "Error",
-                error instanceof Error ? error.message : "Unknown error",
-              );
-            } finally {
-              setActionLoading(null);
-            }
-          },
-        },
-      ],
-    );
+  const confirmAction = async () => {
+    const { actionType } = modalConfig;
+    setModalConfig({ ...modalConfig, visible: false }); // Hide modal
+
+    if (!actionType) return;
+    setActionLoading(actionType);
+
+    try {
+      if (actionType === "RESET_LOGISTICS") {
+        const res = await apiClient("/admin/logistics/reset", {
+          method: "POST",
+        });
+        if (!res.ok) throw new Error("Failed to reset inventory.");
+      } else if (actionType === "WIPE_ATTENDEES") {
+        const res = await apiClient("/admin/attendees/wipe", {
+          method: "DELETE",
+        });
+        if (!res.ok) throw new Error("Failed to wipe attendees.");
+        onAttendeesWiped();
+      }
+    } catch (error) {
+      // In a full app you might show an error modal here, but for danger zone keeping it simple
+      console.log(error);
+    } finally {
+      setActionLoading(null);
+    }
   };
 
   return (
@@ -107,7 +74,15 @@ export default function DangerZone({
           styles.dangerButton,
           { backgroundColor: `${theme.error}10`, borderColor: theme.error },
         ]}
-        onPress={handleResetLogistics}
+        onPress={() =>
+          setModalConfig({
+            visible: true,
+            title: "Reset Inventory?",
+            message:
+              "This will reset all inventory counts to zero. Are you absolutely sure?",
+            actionType: "RESET_LOGISTICS",
+          })
+        }
         disabled={!!actionLoading}
       >
         {actionLoading === "RESET_LOGISTICS" ? (
@@ -127,7 +102,15 @@ export default function DangerZone({
           styles.dangerButton,
           { backgroundColor: theme.error, borderColor: theme.error },
         ]}
-        onPress={handleWipeAttendees}
+        onPress={() =>
+          setModalConfig({
+            visible: true,
+            title: "WIPE ALL ATTENDEES?",
+            message:
+              "CRITICAL WARNING: This deletes ALL attendees and scan logs entirely from the database. Proceed?",
+            actionType: "WIPE_ATTENDEES",
+          })
+        }
         disabled={!!actionLoading}
       >
         {actionLoading === "WIPE_ATTENDEES" ? (
@@ -141,6 +124,68 @@ export default function DangerZone({
           </>
         )}
       </TouchableOpacity>
+
+      {/* Danger Confirmation Modal */}
+      <Modal
+        animationType="fade"
+        transparent
+        visible={modalConfig.visible}
+        onRequestClose={() =>
+          setModalConfig({ ...modalConfig, visible: false })
+        }
+      >
+        <View style={styles.centerModalOverlay}>
+          <View
+            style={[
+              styles.confirmModalCard,
+              { backgroundColor: theme.background },
+            ]}
+          >
+            <View
+              style={[
+                styles.warningIconBg,
+                { backgroundColor: `${theme.error}15` },
+              ]}
+            >
+              <Feather name="alert-octagon" size={32} color={theme.error} />
+            </View>
+            <Text
+              style={[
+                styles.confirmModalTitle,
+                { color: theme.textMain, textAlign: "center" },
+              ]}
+            >
+              {modalConfig.title}
+            </Text>
+            <Text style={[styles.confirmModalText, { color: theme.textMuted }]}>
+              {modalConfig.message}
+            </Text>
+
+            <View style={styles.confirmModalActions}>
+              <TouchableOpacity
+                style={[
+                  styles.confirmBtn,
+                  styles.cancelBtn,
+                  { borderColor: theme.border },
+                ]}
+                onPress={() =>
+                  setModalConfig({ ...modalConfig, visible: false })
+                }
+              >
+                <Text style={[styles.cancelBtnText, { color: theme.textMain }]}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.confirmBtn, { backgroundColor: theme.error }]}
+                onPress={confirmAction}
+              >
+                <Text style={styles.acceptBtnText}>Confirm</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -164,4 +209,56 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   dangerButtonText: { ...FONTS.body, fontWeight: "700", marginLeft: 10 },
+
+  // Modal Styles
+  centerModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: SIZES.padding,
+  },
+  confirmModalCard: {
+    width: "100%",
+    padding: 24,
+    borderRadius: 24,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 10,
+  },
+  warningIconBg: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  confirmModalTitle: { ...FONTS.header, fontSize: 22, marginBottom: 8 },
+  confirmModalText: {
+    ...FONTS.body,
+    fontSize: 15,
+    textAlign: "center",
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  confirmModalActions: { flexDirection: "row", width: "100%", gap: 12 },
+  confirmBtn: {
+    flex: 1,
+    height: 50,
+    borderRadius: SIZES.radius,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  cancelBtn: { borderWidth: 1 },
+  cancelBtnText: { ...FONTS.body, fontWeight: "600", fontSize: 15 },
+  acceptBtnText: {
+    color: "#FFF",
+    ...FONTS.body,
+    fontWeight: "700",
+    fontSize: 15,
+  },
 });

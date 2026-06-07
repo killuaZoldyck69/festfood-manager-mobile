@@ -7,7 +7,8 @@ import * as SecureStore from "expo-secure-store";
 import * as Sharing from "expo-sharing";
 import React, { useState } from "react";
 import {
-  Alert,
+  ActivityIndicator,
+  Modal,
   Platform,
   StyleSheet,
   Text,
@@ -19,7 +20,12 @@ import { FONTS, SIZES } from "../../constants/theme";
 import { useTheme } from "../../hooks/use-theme";
 import { apiClient, uploadFile } from "../../utils/apiClient";
 
-type UploadStatus = "idle" | "uploading" | "downloading" | "success" | "error";
+type UploadStatus =
+  | "idle"
+  | "uploading"
+  | "generating"
+  | "downloading"
+  | "success";
 
 interface Props {
   hasAttendees: boolean;
@@ -36,51 +42,22 @@ export default function DataImportExport({
   const [status, setStatus] = useState<UploadStatus>("idle");
   const [progress, setProgress] = useState<number>(0);
   const [insertedCount, setInsertedCount] = useState<number>(0);
+  const [recentInsertedIds, setRecentInsertedIds] = useState<string[]>([]);
   const [pdfUri, setPdfUri] = useState<string | null>(null);
 
-  const downloadSampleCsv = async (): Promise<void> => {
-    const csvContent = `name,email,studentId,university,role,category,semester,section\nStephanie Perez,stephanie.perez@yahoo.com,24-71529-2,"Independent University, Bangladesh",PARTICIPANT,Project Showcase,1st,C`;
-    const filename = "Sample_Fest_Attendees.csv";
+  const [modalConfig, setModalConfig] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    type: "error" | "info" | "success";
+  } | null>(null);
 
-    if (Platform.OS === "web") {
-      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(blob);
-      link.download = filename;
-      link.click();
-    } else if (Platform.OS === "android") {
-      try {
-        const permissions =
-          await FileSystemLegacy.StorageAccessFramework.requestDirectoryPermissionsAsync();
-        if (permissions.granted) {
-          const fileUri =
-            await FileSystemLegacy.StorageAccessFramework.createFileAsync(
-              permissions.directoryUri,
-              filename,
-              "text/csv",
-            );
-          await FileSystemLegacy.writeAsStringAsync(fileUri, csvContent, {
-            encoding: FileSystemLegacy.EncodingType.UTF8,
-          });
-          Alert.alert("Success ✅", "Sample CSV saved successfully!");
-        }
-      } catch {
-        Alert.alert("Error", "Failed to save file.");
-      }
-    } else {
-      try {
-        const csvFile = new File(Paths.cache, filename);
-        await csvFile.write(csvContent);
-        if (await Sharing.isAvailableAsync()) {
-          await Sharing.shareAsync(csvFile.uri, {
-            mimeType: "text/csv",
-            UTI: "public.comma-separated-values-text",
-          });
-        }
-      } catch {
-        Alert.alert("Error", "Failed to generate sample CSV.");
-      }
-    }
+  const showModal = (
+    title: string,
+    message: string,
+    type: "error" | "info" | "success" = "info",
+  ) => {
+    setModalConfig({ visible: true, title, message, type });
   };
 
   const pickDocument = async (): Promise<void> => {
@@ -91,24 +68,19 @@ export default function DataImportExport({
       });
       if (result.canceled) return;
       if (!result.assets[0].name.toLowerCase().endsWith(".csv")) {
-        Alert.alert("Invalid File", "Select a valid .csv file.");
+        showModal("Invalid File", "Please select a valid .csv file.", "error");
         return;
       }
-      await executeTwoPhaseUpload(result.assets[0]);
+      await executeUpload(result.assets[0]);
     } catch {
-      Alert.alert("Error", "Failed to pick document.");
+      showModal("Error", "Failed to access the file system.", "error");
     }
   };
 
-  const executeTwoPhaseUpload = async (
+  const executeUpload = async (
     file: DocumentPicker.DocumentPickerAsset,
   ): Promise<void> => {
     setStatus("uploading");
-    setProgress(0);
-    const progressInterval = setInterval(
-      () => setProgress((prev) => Math.min(prev + 5, 95)),
-      800,
-    );
 
     try {
       const formData = new FormData();
@@ -126,44 +98,79 @@ export default function DataImportExport({
       }
 
       const uploadRes = await uploadFile("/admin/upload", formData);
-      const data = await uploadRes.json();
-      clearInterval(progressInterval);
+      const resData = await uploadRes.json();
 
       if (uploadRes.status === 409) {
         setStatus("idle");
-        Alert.alert("Upload Skipped", data.message || "Attendees exist.");
+        showModal(
+          "Upload Skipped",
+          resData.message || "Attendees already exist.",
+          "info",
+        );
         return;
       }
-      if (!uploadRes.ok || !data.fileName) {
-        throw new Error(data.error || "Failed to process CSV.");
-      }
+      if (!uploadRes.ok)
+        throw new Error(resData.message || "Failed to process CSV.");
 
-      setInsertedCount(data.insertedCount || 0);
+      setInsertedCount(resData.data?.insertedCount || 0);
+      setRecentInsertedIds(resData.data?.insertedIds || []);
+
+      onAttendeesUpdated();
+      setStatus("success");
+      setPdfUri(null);
+    } catch (error) {
+      setStatus("idle");
+      showModal(
+        "Upload Failed",
+        error instanceof Error ? error.message : "Unknown error.",
+        "error",
+      );
+    }
+  };
+
+  const generateAndDownloadTickets = async (
+    type: "RECENT" | "ALL",
+  ): Promise<void> => {
+    try {
+      setStatus("generating");
+
+      const generateRes = await apiClient("/admin/tickets/generate", {
+        method: "POST",
+        body: JSON.stringify({
+          type,
+          attendeeIds: type === "RECENT" ? recentInsertedIds : undefined,
+        }),
+      });
+
+      const genData = await generateRes.json();
+      if (!generateRes.ok)
+        throw new Error(genData.message || "Failed to generate PDFs.");
+
+      const fileName = genData.data.fileName;
 
       setStatus("downloading");
       setProgress(0);
 
       if (Platform.OS === "web") {
         const pdfRes = await apiClient(
-          `/admin/tickets/download-temp/${data.fileName}`,
-          {
-            method: "GET",
-          },
+          `/admin/tickets/download-temp/${fileName}`,
+          { method: "GET" },
         );
+        setProgress(100);
         const blob = await pdfRes.blob();
         const linkSource = URL.createObjectURL(blob);
         const downloadLink = document.createElement("a");
         downloadLink.href = linkSource;
-        downloadLink.download = data.fileName;
+        downloadLink.download = fileName;
         downloadLink.click();
         setPdfUri(linkSource);
       } else {
-        const downloadUrl = `${API_URL}/admin/tickets/download-temp/${data.fileName}`;
-        const destFile = new File(Paths.document, data.fileName);
-
+        const downloadUrl = `${API_URL}/admin/tickets/download-temp/${fileName}`;
+        const destFile = new File(Paths.document, fileName);
         const token = await SecureStore.getItemAsync(
           "better-auth.session_token",
         );
+
         const headers: Record<string, string> = token
           ? { Authorization: `Bearer ${token}` }
           : {};
@@ -182,108 +189,68 @@ export default function DataImportExport({
             }
           },
         );
+
         await downloadResumable.downloadAsync();
         setPdfUri(destFile.uri);
       }
 
-      onAttendeesUpdated();
       setStatus("success");
     } catch (error) {
-      clearInterval(progressInterval);
-      setStatus("error");
-      Alert.alert(
+      setStatus("idle");
+      showModal(
         "Process Failed",
-        error instanceof Error ? error.message : "Unknown error",
+        error instanceof Error ? error.message : "Generation failed.",
+        "error",
       );
     }
   };
 
   const sharePdf = async (): Promise<void> => {
-    if (!pdfUri) {
-      Alert.alert("Error", "PDF file could not be located.");
-      return;
-    }
-    if (Platform.OS === "web") {
-      const link = document.createElement("a");
-      link.href = pdfUri;
-      link.download = `Fest_Tickets_${Date.now()}.pdf`;
-      link.click();
-      return;
-    }
+    if (!pdfUri)
+      return showModal("Error", "No PDF available to share.", "error");
+    if (Platform.OS === "web") return;
     try {
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(
           pdfUri.startsWith("file://") ? pdfUri : `file://${pdfUri}`,
-          { mimeType: "application/pdf", UTI: "com.adobe.pdf" },
+          {
+            mimeType: "application/pdf",
+            UTI: "com.adobe.pdf",
+          },
         );
       }
     } catch (error) {
-      Alert.alert(
+      showModal(
         "Share Error",
         error instanceof Error ? error.message : "Unknown error",
+        "error",
       );
     }
   };
 
-  const redownloadAllTickets = async (): Promise<void> => {
-    setStatus("downloading");
-    setProgress(0);
+  const downloadSampleCsv = async (): Promise<void> => {
+    const csvContent = `name,email,studentId,university,role,category,semester,section\nStephanie Perez,stephanie.perez@yahoo.com,24-71529-2,"Independent University, Bangladesh",PARTICIPANT,Project Showcase,1st,C`;
+    const filename = "Sample_Fest_Attendees.csv";
 
-    try {
-      const filename = `All_Fest_Tickets_Backup_${Date.now()}.pdf`;
-
-      if (Platform.OS === "web") {
-        const res = await apiClient("/admin/tickets/download-all", {
-          method: "GET",
-        });
-        if (!res.ok) throw new Error("Failed to generate PDF.");
-        setProgress(100);
-        const blob = await res.blob();
-        const link = document.createElement("a");
-        link.href = URL.createObjectURL(blob);
-        link.download = filename;
-        link.click();
-      } else {
-        const endpoint = `${API_URL}/admin/tickets/download-all`;
-        const destFile = new File(Paths.document, filename);
-        const token = await SecureStore.getItemAsync(
-          "better-auth.session_token",
-        );
-        const headers: Record<string, string> = token
-          ? { Authorization: `Bearer ${token}` }
-          : {};
-
-        const downloadResumable = FileSystemLegacy.createDownloadResumable(
-          endpoint,
-          destFile.uri,
-          { headers },
-          (ev) => {
-            if (ev.totalBytesExpectedToWrite > 0) {
-              setProgress(
-                Math.round(
-                  (ev.totalBytesWritten / ev.totalBytesExpectedToWrite) * 100,
-                ),
-              );
-            }
-          },
-        );
-
-        await downloadResumable.downloadAsync();
-
+    if (Platform.OS === "web") {
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = filename;
+      link.click();
+    } else {
+      try {
+        const csvFile = new File(Paths.cache, filename);
+        await csvFile.write(csvContent);
         if (await Sharing.isAvailableAsync()) {
-          await Sharing.shareAsync(destFile.uri, {
-            mimeType: "application/pdf",
-            UTI: "com.adobe.pdf",
+          await Sharing.shareAsync(csvFile.uri, {
+            mimeType: "text/csv",
+            UTI: "public.comma-separated-values-text",
           });
         }
+      } catch {
+        showModal("Error", "Failed to generate sample CSV.", "error");
       }
-    } catch (error) {
-      Alert.alert(
-        "Download Failed",
-        error instanceof Error ? error.message : "Unknown error",
-      );
-    } finally {
-      setStatus("idle");
     }
   };
 
@@ -295,7 +262,9 @@ export default function DataImportExport({
         </Text>
       </View>
 
-      {(status === "uploading" || status === "downloading") && (
+      {(status === "uploading" ||
+        status === "generating" ||
+        status === "downloading") && (
         <View
           style={[
             styles.card,
@@ -309,71 +278,128 @@ export default function DataImportExport({
           <View style={styles.progressHeader}>
             <Text style={[styles.progressTitle, { color: theme.primary }]}>
               {status === "uploading"
-                ? "Uploading & Processing Data..."
-                : "Generating Ticket PDF..."}
+                ? "Uploading CSV to Database..."
+                : status === "generating"
+                  ? "Server generating PDF tickets..."
+                  : "Downloading Ticket File..."}
             </Text>
-            <Text style={[styles.progressPercentage, { color: theme.primary }]}>
-              {Math.round(progress)}%
-            </Text>
+            {status === "downloading" && (
+              <Text
+                style={[styles.progressPercentage, { color: theme.primary }]}
+              >
+                {Math.round(progress)}%
+              </Text>
+            )}
           </View>
-          <View
-            style={[
-              styles.progressBarBg,
-              { backgroundColor: `${theme.primary}20` },
-            ]}
-          >
+
+          {status === "downloading" ? (
             <View
               style={[
-                styles.progressBarFill,
-                { backgroundColor: theme.primary, width: `${progress}%` },
+                styles.progressBarBg,
+                { backgroundColor: `${theme.primary}20` },
               ]}
-            />
-          </View>
+            >
+              <View
+                style={[
+                  styles.progressBarFill,
+                  { backgroundColor: theme.primary, width: `${progress}%` },
+                ]}
+              />
+            </View>
+          ) : (
+            <View style={styles.spinnerContainer}>
+              <ActivityIndicator size="large" color={theme.primary} />
+            </View>
+          )}
         </View>
       )}
 
       {status === "success" && (
         <View style={styles.successContainer}>
-          <View
-            style={[
-              styles.successCard,
-              {
-                backgroundColor: `${theme.success}10`,
-                borderColor: theme.success,
-              },
-            ]}
-          >
-            <Feather
-              name="check-circle"
-              size={24}
-              color={theme.success}
-              style={{ marginRight: 12 }}
-            />
-            <Text style={[styles.successText, { color: theme.success }]}>
-              Imported {insertedCount} attendees!
-            </Text>
-          </View>
-          <TouchableOpacity
-            style={[styles.primaryButton, { backgroundColor: theme.primary }]}
-            onPress={sharePdf}
-          >
-            <Feather
-              name="printer"
-              size={20}
-              color="#FFF"
-              style={{ marginRight: 8 }}
-            />
-            <Text style={styles.primaryButtonText}>SHARE / PRINT TICKETS</Text>
-          </TouchableOpacity>
+          {pdfUri ? (
+            <>
+              <View
+                style={[
+                  styles.successCard,
+                  {
+                    backgroundColor: `${theme.success}10`,
+                    borderColor: theme.success,
+                  },
+                ]}
+              >
+                <Feather
+                  name="check-circle"
+                  size={24}
+                  color={theme.success}
+                  style={{ marginRight: 12 }}
+                />
+                <Text style={[styles.successText, { color: theme.success }]}>
+                  Tickets downloaded successfully!
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={[
+                  styles.primaryButton,
+                  { backgroundColor: theme.primary },
+                ]}
+                onPress={sharePdf}
+              >
+                <Feather
+                  name="share"
+                  size={20}
+                  color="#FFF"
+                  style={{ marginRight: 8 }}
+                />
+                <Text style={styles.primaryButtonText}>SHARE TICKETS</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <View
+                style={[
+                  styles.successCard,
+                  {
+                    backgroundColor: `${theme.success}10`,
+                    borderColor: theme.success,
+                  },
+                ]}
+              >
+                <Feather
+                  name="check-circle"
+                  size={24}
+                  color={theme.success}
+                  style={{ marginRight: 12 }}
+                />
+                <Text style={[styles.successText, { color: theme.success }]}>
+                  Imported {insertedCount} attendees!
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={[
+                  styles.primaryButton,
+                  { backgroundColor: theme.primary },
+                ]}
+                onPress={() => generateAndDownloadTickets("RECENT")}
+              >
+                <Feather
+                  name="printer"
+                  size={20}
+                  color="#FFF"
+                  style={{ marginRight: 8 }}
+                />
+                <Text style={styles.primaryButtonText}>
+                  DOWNLOAD TICKETS (RECENT ONLY)
+                </Text>
+              </TouchableOpacity>
+            </>
+          )}
+
           <TouchableOpacity
             style={[styles.secondaryButton, { borderColor: theme.primary }]}
-            onPress={() => {
-              setStatus("idle");
-              router.push("/directory");
-            }}
+            onPress={() => setStatus("idle")}
           >
             <Feather
-              name="eye"
+              name="refresh-cw"
               size={20}
               color={theme.primary}
               style={{ marginRight: 8 }}
@@ -381,7 +407,7 @@ export default function DataImportExport({
             <Text
               style={[styles.secondaryButtonText, { color: theme.primary }]}
             >
-              View Directory
+              Upload Another CSV
             </Text>
           </TouchableOpacity>
         </View>
@@ -447,16 +473,6 @@ export default function DataImportExport({
             <Text style={[styles.dropzoneTitle, { color: theme.textMain }]}>
               Tap to select CSV file
             </Text>
-            <Text
-              style={{
-                ...FONTS.body,
-                color: theme.textMuted,
-                fontSize: 13,
-                marginTop: 4,
-              }}
-            >
-              Strictly .csv format
-            </Text>
           </TouchableOpacity>
 
           {hasAttendees && (
@@ -465,7 +481,7 @@ export default function DataImportExport({
                 styles.secondaryButton,
                 { borderColor: theme.primary, marginBottom: 24 },
               ]}
-              onPress={redownloadAllTickets}
+              onPress={() => generateAndDownloadTickets("ALL")}
             >
               <Feather
                 name="download-cloud"
@@ -476,12 +492,72 @@ export default function DataImportExport({
               <Text
                 style={[styles.secondaryButtonText, { color: theme.primary }]}
               >
-                REDOWNLOAD TICKETS BACKUP
+                REDOWNLOAD ALL TICKETS BACKUP
               </Text>
             </TouchableOpacity>
           )}
         </>
       )}
+
+      <Modal
+        animationType="fade"
+        transparent
+        visible={!!modalConfig}
+        onRequestClose={() => setModalConfig(null)}
+      >
+        <View style={styles.centerModalOverlay}>
+          <View
+            style={[
+              styles.confirmModalCard,
+              { backgroundColor: theme.background },
+            ]}
+          >
+            <View
+              style={[
+                styles.warningIconBg,
+                {
+                  backgroundColor:
+                    modalConfig?.type === "error"
+                      ? `${theme.error}15`
+                      : `${theme.primary}15`,
+                },
+              ]}
+            >
+              <Feather
+                name={modalConfig?.type === "error" ? "alert-triangle" : "info"}
+                size={32}
+                color={
+                  modalConfig?.type === "error" ? theme.error : theme.primary
+                }
+              />
+            </View>
+            <Text
+              style={[
+                styles.confirmModalTitle,
+                { color: theme.textMain, textAlign: "center" },
+              ]}
+            >
+              {modalConfig?.title}
+            </Text>
+            <Text style={[styles.confirmModalText, { color: theme.textMuted }]}>
+              {modalConfig?.message}
+            </Text>
+            <TouchableOpacity
+              style={[
+                styles.confirmBtn,
+                {
+                  backgroundColor:
+                    modalConfig?.type === "error" ? theme.error : theme.primary,
+                  width: "100%",
+                },
+              ]}
+              onPress={() => setModalConfig(null)}
+            >
+              <Text style={styles.acceptBtnText}>Dismiss</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -494,16 +570,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   sectionTitle: { ...FONTS.header, fontSize: 20 },
-  card: {
-    padding: 20,
-    borderRadius: SIZES.radius,
-    marginBottom: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
+  card: { padding: 20, borderRadius: SIZES.radius, marginBottom: 16 },
   progressHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -518,7 +585,11 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   progressBarFill: { height: "100%", borderRadius: 4 },
-
+  spinnerContainer: {
+    paddingVertical: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   guideCard: {
     padding: 16,
     borderRadius: SIZES.radius,
@@ -548,7 +619,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginLeft: 6,
   },
-
   dropzone: {
     padding: 32,
     borderRadius: SIZES.radius,
@@ -567,7 +637,6 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   dropzoneTitle: { ...FONTS.header, fontSize: 18 },
-
   successContainer: { marginTop: 8, marginBottom: 24 },
   successCard: {
     flexDirection: "row",
@@ -601,4 +670,50 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   secondaryButtonText: { ...FONTS.body, fontWeight: "700", letterSpacing: 0.5 },
+  centerModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: SIZES.padding,
+  },
+  confirmModalCard: {
+    width: "100%",
+    padding: 24,
+    borderRadius: 24,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 10,
+  },
+  warningIconBg: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  confirmModalTitle: { ...FONTS.header, fontSize: 22, marginBottom: 8 },
+  confirmModalText: {
+    ...FONTS.body,
+    fontSize: 15,
+    textAlign: "center",
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  confirmBtn: {
+    height: 50,
+    borderRadius: SIZES.radius,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  acceptBtnText: {
+    color: "#FFF",
+    ...FONTS.body,
+    fontWeight: "700",
+    fontSize: 15,
+  },
 });
