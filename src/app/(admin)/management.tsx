@@ -1,62 +1,30 @@
-import { FONTS, SIZES } from "@/constants/theme";
-import { useTheme } from "@/hooks/use-theme";
 import { useFocusEffect } from "expo-router";
-import * as SecureStore from "expo-secure-store";
 import React, { useCallback, useState } from "react";
 import { Platform, ScrollView, StyleSheet, Text, View } from "react-native";
+import DangerZone from "../../components/admin/DangerZone";
+import DataImportExport from "../../components/admin/DataImportExport";
+import VolunteerList from "../../components/admin/VolunteerList";
+import { FONTS, SIZES } from "../../constants/theme";
+import { useTheme } from "../../hooks/use-theme";
+import { apiClient } from "../../utils/apiClient";
 
-// Import your newly created components!
-import DangerZone from "@/components/admin/DangerZone";
-import DataImportExport from "@/components/admin/DataImportExport";
-import VolunteerList from "@/components/admin/VolunteerList";
-
-const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
-
-export default function AdminManagementScreen() {
+export default function AdminManagementScreen(): React.ReactElement {
   const theme = useTheme();
+  const [hasAttendees, setHasAttendees] = useState<boolean>(false);
 
-  // This state is shared: DataImport sets it to true, DangerZone sets it to false.
-  const [hasAttendees, setHasAttendees] = useState(false);
-
-  // Check the DB for attendees when the screen opens
   useFocusEffect(
     useCallback(() => {
-      const checkAttendees = async () => {
+      const checkAttendees = async (): Promise<void> => {
         try {
-          const token = await SecureStore.getItemAsync(
-            "better-auth.session_token",
-          );
-
-          // 🔴 FIX: Added strict cache-control headers
-          const headers: Record<string, string> = {
-            Accept: "application/json",
-            "Cache-Control": "no-cache, no-store, must-revalidate",
-            Pragma: "no-cache",
-            Expires: "0",
-          };
-          if (token) headers.Authorization = `Bearer ${token}`;
-
-          // 🔴 FIX: Cache-busting timestamp appended to the URL
-          const res = await fetch(
-            `${BASE_URL}/api/admin/attendees?limit=1&_t=${Date.now()}`,
-            {
-              headers,
-            },
-          );
-
+          const res = await apiClient("/admin/attendees?limit=1");
           if (res.ok) {
             const data = await res.json();
-            const count =
-              data?.meta?.totalAttendees || data?.attendees?.length || 0;
-            setHasAttendees(count > 0);
-          } else {
-            setHasAttendees(false);
+            setHasAttendees(data.meta.total > 0);
           }
         } catch {
           setHasAttendees(false);
         }
       };
-
       checkAttendees();
     }, []),
   );

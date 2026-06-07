@@ -1,169 +1,81 @@
+import React, { useState } from "react";
+import { SafeAreaView, StyleSheet, Text, View } from "react-native";
+
 import AttendeeCard from "@/components/directory/AttendeeCard";
 import DirectoryFilters from "@/components/directory/DirectoryFilters";
-import DirectoryModals from "@/components/directory/DirectoryModals";
-import { FONTS, SIZES } from "@/constants/theme";
-import { useTheme } from "@/hooks/use-theme";
-import { apiClient } from "@/utils/apiClient";
-import { Feather } from "@expo/vector-icons";
-import { useFocusEffect } from "expo-router";
-import React, { useCallback, useEffect, useState } from "react";
-import {
-  ActivityIndicator,
-  FlatList,
-  Platform,
-  SafeAreaView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import DirectoryModals, {
+  ErrorModalInfo,
+} from "@/components/directory/DirectoryModals";
+import { EmptyState } from "../../components/ui/EmptyState";
+import { PaginationFooter } from "../../components/ui/PaginationFooter";
+import { FONTS, SIZES } from "../../constants/theme";
+import { useApiFetch } from "../../hooks/use-api-fetch";
+import { useTheme } from "../../hooks/use-theme";
+import { AttendeeListItem } from "../../types";
+import { apiClient } from "../../utils/apiClient";
 
-export default function AdminDirectoryScreen() {
+export default function AdminDirectoryScreen(): React.ReactElement {
   const theme = useTheme();
 
-  // --- DATA STATE ---
-  const [attendees, setAttendees] = useState<any[]>([]);
-  const [meta, setMeta] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<string>("ALL");
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [selectedCategory, setSelectedCategory] = useState<string>("ALL");
+  const [selectedUniversity, setSelectedUniversity] = useState<string>("ALL");
 
-  // --- FILTER STATE ---
-  const [filterOptions, setFilterOptions] = useState({
-    categories: [{ name: "ALL" }],
-    universities: [{ name: "ALL" }],
-  });
-  const [activeTab, setActiveTab] = useState("ALL");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("ALL");
-  const [selectedUniversity, setSelectedUniversity] = useState("ALL");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
-
-  // --- MODAL STATE ---
-  const [selectedAttendee, setSelectedAttendee] = useState<any>(null);
-  const [claimConfirmAttendee, setClaimConfirmAttendee] = useState<any>(null);
-  const [errorModalInfo, setErrorModalInfo] = useState<any>(null);
-
-  // 1. Initial Load: Fetch dynamic options
-  useFocusEffect(
-    useCallback(() => {
-      const fetchDynamicFilters = async () => {
-        try {
-          const response = await apiClient("/admin/attendees/filters", {
-            method: "GET",
-          });
-          if (response.ok) {
-            const data = await response.json();
-            const payload = data.data ? data.data : data;
-
-            setFilterOptions({
-              categories: [{ name: "ALL" }, ...(payload.categories || [])],
-              universities: [{ name: "ALL" }, ...(payload.universities || [])],
-            });
-          }
-        } catch (error) {
-          console.error("Failed to fetch filters", error);
-        }
-      };
-      fetchDynamicFilters();
-    }, []),
-  );
-
-  // 2. Debounce Search
-  // 🔴 FIX: Removed the unconditional setAttendees([]) that was wiping the screen
-  // after 500ms of the component mounting.
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedSearch(searchQuery);
-    }, 500);
-    return () => clearTimeout(handler);
-  }, [searchQuery]);
-
-  // 3. API Query execution
-  const fetchAttendees = async (pageNumber: number) => {
-    setIsLoading(true);
-    try {
-      let url = `/admin/attendees?page=${pageNumber}&limit=25`;
-      if (activeTab !== "ALL") url += `&status=${activeTab}`;
-      if (selectedCategory !== "ALL")
-        url += `&category=${encodeURIComponent(selectedCategory)}`;
-      if (selectedUniversity !== "ALL")
-        url += `&university=${encodeURIComponent(selectedUniversity)}`;
-      if (debouncedSearch.trim().length > 0)
-        url += `&search=${encodeURIComponent(debouncedSearch.trim())}`;
-
-      const response = await apiClient(url, { method: "GET" });
-      if (response.ok) {
-        const data = await response.json();
-        const payload = data.data ? data.data : data;
-
-        setAttendees(payload.attendees || []);
-        setMeta(payload.meta || null);
-      }
-    } finally {
-      setIsLoading(false);
-    }
+  const params: Record<string, string> = {
+    ...(activeTab !== "ALL" && { status: activeTab }),
+    ...(selectedCategory !== "ALL" && { category: selectedCategory }),
+    ...(selectedUniversity !== "ALL" && { university: selectedUniversity }),
+    ...(searchQuery.trim() !== "" && { search: searchQuery.trim() }),
   };
-  useFocusEffect(
-    useCallback(() => {
-      fetchAttendees(1);
-    }, [activeTab, debouncedSearch, selectedCategory, selectedUniversity]),
+
+  const { data, meta, isLoading, error, fetch } = useApiFetch<AttendeeListItem>(
+    "/admin/attendees",
+    params,
   );
 
-  const clearFilters = useCallback(() => {
-    setAttendees([]);
-    setSearchQuery("");
-    setSelectedCategory("ALL");
-    setSelectedUniversity("ALL");
-    setActiveTab("ALL");
-  }, []);
+  const [selectedAttendee, setSelectedAttendee] =
+    useState<AttendeeListItem | null>(null);
+  const [claimConfirmAttendee, setClaimConfirmAttendee] =
+    useState<AttendeeListItem | null>(null);
+  const [errorModalInfo, setErrorModalInfo] = useState<ErrorModalInfo | null>(
+    null,
+  );
 
-  // --- MANUAL CLAIM API ---
-  const handleManualClaim = async () => {
+  const handleManualClaim = async (): Promise<void> => {
     if (!claimConfirmAttendee) return;
-    const attendeeId = claimConfirmAttendee.id;
-    const previousAttendees = [...attendees];
-    setClaimConfirmAttendee(null);
-
-    setAttendees((prev) =>
-      prev.map((a) =>
-        a.id === attendeeId
-          ? {
-              ...a,
-              foodClaimed: true,
-              claimedAt: new Date().toISOString(),
-              scannerName: "Manual Override",
-              scannerRole: "ADMIN",
-            }
-          : a,
-      ),
-    );
 
     try {
       const response = await apiClient("/admin/override", {
         method: "POST",
-        body: JSON.stringify({ attendeeId }),
+        body: JSON.stringify({ attendeeId: claimConfirmAttendee.id }),
       });
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         const errMsg = (errorData.message || "").toUpperCase();
-        if (errMsg.includes("NO FOOD") || errMsg.includes("DEPLETED"))
+        if (errMsg.includes("NO FOOD") || errMsg.includes("DEPLETED")) {
           throw new Error("OUT_OF_STOCK");
-        throw new Error("Failed");
+        }
+        throw new Error("Failed to process claim.");
       }
-    } catch (error: any) {
-      setAttendees(previousAttendees);
-      if (error.message === "OUT_OF_STOCK")
+      setClaimConfirmAttendee(null);
+      fetch(meta.page);
+    } catch (err) {
+      setClaimConfirmAttendee(null);
+      if (err instanceof Error && err.message === "OUT_OF_STOCK") {
         setErrorModalInfo({
           title: "Out of Stock",
           message:
             "Inventory is completely depleted. Increase limits on the dashboard.",
           type: "OUT_OF_STOCK",
         });
-      else
+      } else {
         setErrorModalInfo({
           title: "Override Failed",
           message: "Could not mark as claimed. Check your connection.",
           type: "ERROR",
         });
+      }
     }
   };
 
@@ -173,159 +85,56 @@ export default function AdminDirectoryScreen() {
         <Text style={[styles.headerTitle, { color: theme.primary }]}>
           Attendee Directory
         </Text>
-        {meta && (
-          <Text style={[styles.totalLogs, { color: theme.textMuted }]}>
-            {meta.totalAttendees}{" "}
-            {activeTab === "ALL"
-              ? "Registered"
-              : activeTab === "CLAIMED"
-                ? "Claimed"
-                : "Pending"}
-          </Text>
-        )}
+        <Text style={[styles.totalLogs, { color: theme.textMuted }]}>
+          {meta.total} Registered
+        </Text>
       </View>
 
       <View style={[styles.container, { backgroundColor: theme.background }]}>
-        {/* COMPONENT: Filter Controls */}
         <DirectoryFilters
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
           activeTab={activeTab}
-          setActiveTab={(val) => {
-            if (val !== activeTab) {
-              setAttendees([]);
-              setActiveTab(val);
-            }
-          }}
+          setActiveTab={setActiveTab}
           selectedCategory={selectedCategory}
-          setSelectedCategory={(val) => {
-            if (val !== selectedCategory) {
-              setAttendees([]);
-              setSelectedCategory(val);
-            }
-          }}
+          setSelectedCategory={setSelectedCategory}
           selectedUniversity={selectedUniversity}
-          setSelectedUniversity={(val) => {
-            if (val !== selectedUniversity) {
-              setAttendees([]);
-              setSelectedUniversity(val);
-            }
+          setSelectedUniversity={setSelectedUniversity}
+          filterOptions={{ categories: [], universities: [] }} // Hook/Context needed for filter source
+          clearFilters={() => {
+            setSearchQuery("");
+            setSelectedCategory("ALL");
+            setSelectedUniversity("ALL");
+            setActiveTab("ALL");
           }}
-          filterOptions={filterOptions}
-          clearFilters={clearFilters}
         />
 
-        <FlatList
-          data={attendees}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <AttendeeCard
-              item={item}
-              onSelect={setSelectedAttendee}
-              onManualClaim={setClaimConfirmAttendee}
+        {error ? (
+          <EmptyState icon="alert-octagon" message={error} />
+        ) : isLoading && data.length === 0 ? (
+          <EmptyState icon="search" message="Loading attendees..." />
+        ) : data.length === 0 ? (
+          <EmptyState icon="users" message="No attendees found." />
+        ) : (
+          <View style={styles.list}>
+            {data.map((item) => (
+              <AttendeeCard
+                key={item.id}
+                item={item}
+                onSelect={setSelectedAttendee}
+                onManualClaim={setClaimConfirmAttendee}
+              />
+            ))}
+            <PaginationFooter
+              meta={meta}
+              isLoading={isLoading}
+              onPrev={() => fetch(meta.page - 1)}
+              onNext={() => fetch(meta.page + 1)}
             />
-          )}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-          ListEmptyComponent={
-            <View style={styles.centerContent}>
-              {isLoading ? (
-                <ActivityIndicator
-                  size="large"
-                  color={theme.primary}
-                  style={{ marginTop: 60 }}
-                />
-              ) : (
-                <View style={{ alignItems: "center", marginTop: 60 }}>
-                  <Feather
-                    name="search"
-                    size={40}
-                    color={theme.textMuted}
-                    style={{ marginBottom: 16 }}
-                  />
-                  <Text style={{ color: theme.textMuted, ...FONTS.body }}>
-                    No attendees found matching filters.
-                  </Text>
-                </View>
-              )}
-            </View>
-          }
-          ListFooterComponent={
-            attendees.length > 0 && meta && meta.totalPages > 1 ? (
-              <View style={styles.paginationWrapper}>
-                <TouchableOpacity
-                  style={[
-                    styles.pageBtn,
-                    meta.currentPage === 1 && { opacity: 0.5 },
-                    {
-                      backgroundColor: theme.surface,
-                      borderColor: theme.border,
-                    },
-                  ]}
-                  disabled={meta.currentPage === 1 || isLoading}
-                  onPress={() => fetchAttendees(meta.currentPage - 1)}
-                >
-                  <Feather
-                    name="chevron-left"
-                    size={20}
-                    color={
-                      meta.currentPage === 1 ? theme.textMuted : theme.primary
-                    }
-                  />
-                  <Text
-                    style={[
-                      styles.pageBtnText,
-                      {
-                        color:
-                          meta.currentPage === 1
-                            ? theme.textMuted
-                            : theme.primary,
-                        marginLeft: 4,
-                      },
-                    ]}
-                  >
-                    Prev
-                  </Text>
-                </TouchableOpacity>
-                <Text style={[styles.pageIndicator, { color: theme.textMain }]}>
-                  Page {meta.currentPage} of {meta.totalPages}
-                </Text>
-                <TouchableOpacity
-                  style={[
-                    styles.pageBtn,
-                    !meta.hasMore && { opacity: 0.5 },
-                    {
-                      backgroundColor: theme.surface,
-                      borderColor: theme.border,
-                    },
-                  ]}
-                  disabled={!meta.hasMore || isLoading}
-                  onPress={() => fetchAttendees(meta.currentPage + 1)}
-                >
-                  <Text
-                    style={[
-                      styles.pageBtnText,
-                      {
-                        color: !meta.hasMore ? theme.textMuted : theme.primary,
-                        marginRight: 4,
-                      },
-                    ]}
-                  >
-                    Next
-                  </Text>
-                  <Feather
-                    name="chevron-right"
-                    size={20}
-                    color={!meta.hasMore ? theme.textMuted : theme.primary}
-                  />
-                </TouchableOpacity>
-              </View>
-            ) : null
-          }
-        />
+          </View>
+        )}
       </View>
 
-      {/* COMPONENT: All Modals */}
       <DirectoryModals
         selectedAttendee={selectedAttendee}
         setSelectedAttendee={setSelectedAttendee}
@@ -340,40 +149,10 @@ export default function AdminDirectoryScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, paddingTop: Platform.OS === "android" ? 40 : 16 },
+  safeArea: { flex: 1 },
   container: { flex: 1 },
-  centerContent: { flex: 1, justifyContent: "center", alignItems: "center" },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: SIZES.padding,
-    paddingVertical: 16,
-  },
+  header: { padding: SIZES.padding },
   headerTitle: { ...FONTS.header, fontSize: 28 },
   totalLogs: { ...FONTS.body, fontWeight: "600" },
-  listContent: {
-    paddingHorizontal: SIZES.padding,
-    paddingTop: 8,
-    paddingBottom: 100,
-  },
-  paginationWrapper: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 24,
-    borderTopWidth: 1,
-    borderTopColor: "rgba(0,0,0,0.05)",
-    marginTop: 8,
-  },
-  pageBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: SIZES.radius,
-    borderWidth: 1,
-  },
-  pageBtnText: { ...FONTS.body, fontWeight: "700", fontSize: 14 },
-  pageIndicator: { ...FONTS.body, fontWeight: "600", fontSize: 14 },
+  list: { flex: 1, paddingHorizontal: SIZES.padding },
 });
