@@ -1,8 +1,9 @@
-import { FONTS } from "@/constants/theme";
-import { useTheme } from "@/hooks/use-theme";
-import { apiClient } from "@/utils/apiClient";
 import { Feather, Ionicons } from "@expo/vector-icons";
-import { CameraView, useCameraPermissions } from "expo-camera";
+import {
+  BarcodeScanningResult,
+  CameraView,
+  useCameraPermissions,
+} from "expo-camera";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
@@ -13,15 +14,11 @@ import {
   Text,
   View,
 } from "react-native";
-
-// 🧹 CLEANED: Exact 1:1 match with backend API response statuses
-type ScanStatus =
-  | "IDLE"
-  | "PROCESSING"
-  | "SUCCESS"
-  | "DUPLICATE"
-  | "INVALID"
-  | "DEPLETED";
+import { FONTS } from "../constants/theme";
+import { useTheme } from "../hooks/use-theme";
+import { ScanStatus } from "../types";
+import { apiClient } from "../utils/apiClient";
+import { formatTime } from "../utils/formatDate";
 
 interface ScanData {
   name?: string;
@@ -33,22 +30,15 @@ interface ScannerScreenProps {
   role: "ADMIN" | "VOLUNTEER";
 }
 
-const formatTime = (dateString: string | undefined) => {
-  if (!dateString) return "Unknown Time";
-  if (dateString.match(/AM|PM/i)) return dateString;
-
-  const date = new Date(dateString);
-  return isNaN(date.getTime())
-    ? dateString
-    : date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-};
-
-export default function ScannerScreen({ role }: ScannerScreenProps) {
+export default function ScannerScreen({
+  role,
+}: ScannerScreenProps): React.ReactElement {
   const theme = useTheme();
   const [permission, requestPermission] = useCameraPermissions();
 
   const [status, setStatus] = useState<ScanStatus>("IDLE");
   const [scanData, setScanData] = useState<ScanData>({});
+  const [errorState, setErrorState] = useState<string | null>(null);
 
   if (!permission) return <View style={styles.container} />;
 
@@ -80,21 +70,17 @@ export default function ScannerScreen({ role }: ScannerScreenProps) {
     );
   }
 
-  // 🧹 CLEANED: Removed all bloated error string matching.
-  // We now strictly trust the explicit status returned by the backend API.
-  const handleBarcodeScanned = async ({
-    data,
-  }: {
-    type: string;
-    data: string;
-  }) => {
+  const handleBarcodeScanned = async (
+    result: BarcodeScanningResult,
+  ): Promise<void> => {
     if (status !== "IDLE") return;
     setStatus("PROCESSING");
+    setErrorState(null);
 
     try {
       const response = await apiClient("/scan", {
         method: "POST",
-        body: JSON.stringify({ qrToken: data }),
+        body: JSON.stringify({ qrToken: result.data }),
       });
 
       const responseData = await response.json();
@@ -124,14 +110,15 @@ export default function ScannerScreen({ role }: ScannerScreenProps) {
           break;
       }
     } catch (error) {
-      console.error("Scan API Error:", error);
-      setStatus("INVALID"); // Fallback for network errors/500s
+      setErrorState(error instanceof Error ? error.message : "Network error");
+      setStatus("ERROR");
     }
   };
 
-  const resetScanner = () => {
+  const resetScanner = (): void => {
     setStatus("IDLE");
     setScanData({});
+    setErrorState(null);
   };
 
   return (
@@ -266,7 +253,10 @@ export default function ScannerScreen({ role }: ScannerScreenProps) {
                 <Text
                   style={[styles.outcomeCardSubtitle, { fontWeight: "700" }]}
                 >
-                  Claimed at: {formatTime(scanData.claimedAt)}
+                  Claimed at:{" "}
+                  {scanData.claimedAt
+                    ? formatTime(scanData.claimedAt)
+                    : "Unknown"}
                 </Text>
               </View>
             </View>
@@ -369,6 +359,37 @@ export default function ScannerScreen({ role }: ScannerScreenProps) {
             </View>
 
             <Text style={styles.tapToDismiss}>TAP ANYWHERE TO DISMISS</Text>
+          </Pressable>
+        )}
+
+        {status === "ERROR" && (
+          <Pressable
+            style={[styles.outcomeContainer, { backgroundColor: theme.error }]}
+            onPress={resetScanner}
+          >
+            <Feather
+              name="alert-octagon"
+              size={100}
+              color="#FFF"
+              style={{ marginBottom: 24 }}
+            />
+            <Text style={styles.outcomeTitle}>SYSTEM ERROR</Text>
+
+            <View style={styles.outcomeCard}>
+              <Text style={[styles.outcomeCardEyebrow, { color: theme.error }]}>
+                COMMUNICATION FAILURE
+              </Text>
+              <Text
+                style={[
+                  styles.outcomeCardName,
+                  { color: "#111827", marginVertical: 16, fontSize: 16 },
+                ]}
+              >
+                {errorState}
+              </Text>
+            </View>
+
+            <Text style={styles.tapToDismiss}>TAP ANYWHERE TO RETRY</Text>
           </Pressable>
         )}
       </Modal>

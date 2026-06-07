@@ -1,7 +1,3 @@
-import { FONTS, SIZES } from "@/constants/theme";
-import { useAuth } from "@/context/AuthContext";
-import { useTheme } from "@/hooks/use-theme";
-import { apiClient } from "@/utils/apiClient";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -9,81 +5,75 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
-  Modal,
   Platform,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-
-interface InventoryStats {
-  participants: number;
-  available: number;
-  served: number;
-  duplicates: number;
-  invalid: number;
-}
+import { FONTS, SIZES } from "../constants/theme";
+import { useAuth } from "../context/AuthContext";
+import { useTheme } from "../hooks/use-theme";
+import { InventoryStats } from "../types";
+import { apiClient } from "../utils/apiClient";
+import { InventoryAdjustModal } from "./admin/InventoryAdjustModal";
+import { EmptyState } from "./ui/EmptyState";
 
 const MOCK_STATS: InventoryStats = {
-  participants: 0,
-  available: 0,
-  served: 0,
-  duplicates: 0,
-  invalid: 0,
+  totalParticipants: 0,
+  totalAvailable: 0,
+  totalServed: 0,
+  duplicateScans: 0,
+  invalidTickets: 0,
+  percentageClaimed: 0,
 };
 
 interface InventoryScreenProps {
   role: "ADMIN" | "VOLUNTEER";
 }
 
-export default function InventoryScreen({ role }: InventoryScreenProps) {
+export default function InventoryScreen({
+  role,
+}: InventoryScreenProps): React.ReactElement {
   const theme = useTheme();
   const { user, signOut } = useAuth();
 
   const [stats, setStats] = useState<InventoryStats>(MOCK_STATS);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [errorState, setErrorState] = useState<string | null>(null);
 
-  const [isUpdating, setIsUpdating] = useState(false);
-  const [isModalVisible, setIsModalVisible] = useState(false);
-  const [inventoryInput, setInventoryInput] = useState("0");
+  const [isModalVisible, setIsModalVisible] = useState<boolean>(false);
 
   const animatedProgress = useRef(new Animated.Value(0)).current;
 
-  const fetchInventory = async () => {
+  const fetchInventory = async (): Promise<void> => {
+    setErrorState(null);
     try {
-      // 🔴 FIX: Added deep cache-busting timestamp and strict headers to force fresh stats
-      const response = await apiClient(`/inventory?_t=${Date.now()}`, {
+      const response = await apiClient("/inventory", {
         method: "GET",
-        headers: {
-          "Cache-Control": "no-cache, no-store, must-revalidate",
-          Pragma: "no-cache",
-          Expires: "0",
-        },
       });
 
       if (response.ok) {
-        const data = await response.json();
+        const data = (await response.json()) as InventoryStats;
         setStats({
-          participants:
-            data?.participants ??
-            data?.totalParticipants ??
-            MOCK_STATS.participants,
-          available:
-            data?.available ?? data?.totalAvailable ?? MOCK_STATS.available,
-          served: data?.served ?? data?.totalServed ?? MOCK_STATS.served,
-          duplicates:
-            data?.duplicates ?? data?.duplicateScans ?? MOCK_STATS.duplicates,
-          invalid: data?.invalid ?? data?.invalidTickets ?? MOCK_STATS.invalid,
+          totalParticipants:
+            data.totalParticipants ?? MOCK_STATS.totalParticipants,
+          totalAvailable: data.totalAvailable ?? MOCK_STATS.totalAvailable,
+          totalServed: data.totalServed ?? MOCK_STATS.totalServed,
+          duplicateScans: data.duplicateScans ?? MOCK_STATS.duplicateScans,
+          invalidTickets: data.invalidTickets ?? MOCK_STATS.invalidTickets,
+          percentageClaimed:
+            data.percentageClaimed ?? MOCK_STATS.percentageClaimed,
         });
+      } else {
+        throw new Error("Failed to load inventory data");
       }
     } catch (error) {
-      console.error("Failed to fetch inventory:", error);
+      setErrorState(error instanceof Error ? error.message : "Network error");
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -96,35 +86,19 @@ export default function InventoryScreen({ role }: InventoryScreenProps) {
     }, []),
   );
 
-  const onRefresh = () => {
+  const onRefresh = (): void => {
     setIsRefreshing(true);
     fetchInventory();
   };
 
-  const openModal = () => {
-    setInventoryInput((stats?.available ?? 0).toString());
-    setIsModalVisible(true);
-  };
-
-  const adjustInventory = (amount: number) => {
-    const currentVal = parseInt(inventoryInput) || 0;
-    const newVal = Math.max(0, currentVal + amount);
-    setInventoryInput(newVal.toString());
-  };
-
-  const submitInventoryUpdate = async () => {
-    const newValue = parseInt(inventoryInput);
-    if (isNaN(newValue)) return;
-
-    setIsUpdating(true);
-    const previousAvailable = stats.available;
-    setStats((prev) => ({ ...prev, available: newValue }));
-    setIsModalVisible(false);
+  const submitInventoryUpdate = async (newAvailable: number): Promise<void> => {
+    const previousAvailable = stats.totalAvailable;
+    setStats((prev) => ({ ...prev, totalAvailable: newAvailable }));
 
     try {
       const response = await apiClient("/admin/inventory", {
         method: "PUT",
-        body: JSON.stringify({ totalAvailable: newValue }),
+        body: JSON.stringify({ totalAvailable: newAvailable }),
       });
 
       if (!response.ok) throw new Error("Failed to update inventory.");
@@ -133,18 +107,20 @@ export default function InventoryScreen({ role }: InventoryScreenProps) {
         "Update Failed",
         "Could not reach the server. Reverting value.",
       );
-      setStats((prev) => ({ ...prev, available: previousAvailable }));
-    } finally {
-      setIsUpdating(false);
+      setStats((prev) => ({ ...prev, totalAvailable: previousAvailable }));
     }
   };
 
-  const total = stats?.participants ?? 0;
-  const served = stats?.served ?? 0;
   const progressPercentage =
-    total === 0
+    stats.totalParticipants === 0
       ? 0
-      : Math.min(100, Math.max(0, Math.round((served / total) * 100)));
+      : Math.min(
+          100,
+          Math.max(
+            0,
+            Math.round((stats.totalServed / stats.totalParticipants) * 100),
+          ),
+        );
 
   useEffect(() => {
     Animated.timing(animatedProgress, {
@@ -154,7 +130,6 @@ export default function InventoryScreen({ role }: InventoryScreenProps) {
     }).start();
   }, [progressPercentage]);
 
-  // Maps the 0-100 number to a CSS width percentage string
   const widthInterpolation = animatedProgress.interpolate({
     inputRange: [0, 100],
     outputRange: ["0%", "100%"],
@@ -186,7 +161,7 @@ export default function InventoryScreen({ role }: InventoryScreenProps) {
               style={[styles.userName, { color: theme.primary }]}
               numberOfLines={1}
             >
-              {user?.name || "Md. Nahid"}
+              {user?.name || "User"}
             </Text>
             <View
               style={[styles.roleBadge, { backgroundColor: theme.primary }]}
@@ -218,9 +193,10 @@ export default function InventoryScreen({ role }: InventoryScreenProps) {
             color={theme.primary}
             style={{ marginTop: 40 }}
           />
+        ) : errorState ? (
+          <EmptyState icon="alert-octagon" message={errorState} />
         ) : (
           <>
-            {/* Animated Progress Hero Card */}
             <View style={[styles.heroCard, { backgroundColor: theme.surface }]}>
               <View style={styles.heroTextRow}>
                 <View>
@@ -241,7 +217,6 @@ export default function InventoryScreen({ role }: InventoryScreenProps) {
                 </View>
               </View>
 
-              {/* The actual progress bar track */}
               <View
                 style={[
                   styles.progressBarBg,
@@ -261,13 +236,12 @@ export default function InventoryScreen({ role }: InventoryScreenProps) {
 
               <Text style={[styles.heroSubtitle, { color: theme.textMuted }]}>
                 <Text style={{ color: theme.textMain, fontWeight: "700" }}>
-                  {served}
+                  {stats.totalServed}
                 </Text>{" "}
-                of {total} total tickets scanned
+                of {stats.totalParticipants} total tickets scanned
               </Text>
             </View>
 
-            {/* Total Participants Card */}
             <View
               style={[styles.fullWidthCard, { backgroundColor: theme.surface }]}
             >
@@ -278,7 +252,7 @@ export default function InventoryScreen({ role }: InventoryScreenProps) {
                 <Text
                   style={[styles.fullWidthValue, { color: theme.textMain }]}
                 >
-                  {stats?.participants ?? 0}
+                  {stats.totalParticipants}
                 </Text>
               </View>
               <View
@@ -292,7 +266,6 @@ export default function InventoryScreen({ role }: InventoryScreenProps) {
             </View>
 
             <View style={styles.grid}>
-              {/* CARD 1: Total Available */}
               <View
                 style={[styles.gridCard, { backgroundColor: theme.surface }]}
               >
@@ -319,11 +292,10 @@ export default function InventoryScreen({ role }: InventoryScreenProps) {
                   />
                 </View>
                 <Text style={[styles.gridValue, { color: theme.textMain }]}>
-                  {stats?.available ?? 0}
+                  {stats.totalAvailable}
                 </Text>
               </View>
 
-              {/* CARD 2: Total Served */}
               <View
                 style={[styles.gridCard, { backgroundColor: theme.surface }]}
               >
@@ -350,11 +322,10 @@ export default function InventoryScreen({ role }: InventoryScreenProps) {
                   />
                 </View>
                 <Text style={[styles.gridValue, { color: theme.success }]}>
-                  {stats?.served ?? 0}
+                  {stats.totalServed}
                 </Text>
               </View>
 
-              {/* CARD 3: Duplicate Scans */}
               <View
                 style={[styles.gridCard, { backgroundColor: theme.surface }]}
               >
@@ -377,11 +348,10 @@ export default function InventoryScreen({ role }: InventoryScreenProps) {
                   <Feather name="copy" size={18} color={theme.error} />
                 </View>
                 <Text style={[styles.gridValue, { color: theme.error }]}>
-                  {stats?.duplicates ?? 0}
+                  {stats.duplicateScans}
                 </Text>
               </View>
 
-              {/* CARD 4: Invalid Tickets */}
               <View
                 style={[styles.gridCard, { backgroundColor: theme.surface }]}
               >
@@ -404,7 +374,7 @@ export default function InventoryScreen({ role }: InventoryScreenProps) {
                   <Feather name="alert-triangle" size={18} color="#F59E0B" />
                 </View>
                 <Text style={[styles.gridValue, { color: "#F59E0B" }]}>
-                  {stats?.invalid ?? 0}
+                  {stats.invalidTickets}
                 </Text>
               </View>
             </View>
@@ -416,7 +386,7 @@ export default function InventoryScreen({ role }: InventoryScreenProps) {
                   { borderColor: theme.border, backgroundColor: theme.surface },
                 ]}
                 activeOpacity={0.7}
-                onPress={openModal}
+                onPress={() => setIsModalVisible(true)}
               >
                 <Feather name="sliders" size={20} color={theme.primary} />
                 <Text style={[styles.adjustBtnText, { color: theme.primary }]}>
@@ -430,116 +400,13 @@ export default function InventoryScreen({ role }: InventoryScreenProps) {
         )}
       </ScrollView>
 
-      {/* Admin Adjustment Modal */}
       {role === "ADMIN" && (
-        <Modal
-          animationType="fade"
-          transparent={true}
+        <InventoryAdjustModal
           visible={isModalVisible}
-          onRequestClose={() => setIsModalVisible(false)}
-        >
-          <View style={styles.modalOverlay}>
-            <TouchableOpacity
-              style={StyleSheet.absoluteFillObject}
-              activeOpacity={1}
-              onPress={() => setIsModalVisible(false)}
-            />
-            <View
-              style={[
-                styles.modalContent,
-                { backgroundColor: theme.background },
-              ]}
-            >
-              <View style={styles.modalHeader}>
-                <Text style={[styles.modalTitle, { color: theme.textMain }]}>
-                  Update Logistics
-                </Text>
-                <TouchableOpacity onPress={() => setIsModalVisible(false)}>
-                  <Feather name="x" size={24} color={theme.textMain} />
-                </TouchableOpacity>
-              </View>
-
-              <View
-                style={[
-                  styles.readOnlyRow,
-                  { backgroundColor: `${theme.primary}05` },
-                ]}
-              >
-                <Text
-                  style={[styles.readOnlyLabel, { color: theme.textMuted }]}
-                >
-                  Current Available
-                </Text>
-                <Text style={[styles.readOnlyValue, { color: theme.primary }]}>
-                  {stats?.available ?? 0}
-                </Text>
-              </View>
-
-              <Text style={[styles.inputLabel, { color: theme.textMain }]}>
-                Total Inventory Target
-              </Text>
-              <View style={styles.inputRow}>
-                <TouchableOpacity
-                  style={[
-                    styles.adjustCircle,
-                    { backgroundColor: theme.surface },
-                  ]}
-                  onPress={() => adjustInventory(-10)}
-                >
-                  <Text
-                    style={[styles.adjustCircleText, { color: theme.textMain }]}
-                  >
-                    -10
-                  </Text>
-                </TouchableOpacity>
-                <TextInput
-                  style={[
-                    styles.numberInput,
-                    {
-                      backgroundColor: theme.surface,
-                      color: theme.textMain,
-                      borderColor: theme.border,
-                    },
-                  ]}
-                  keyboardType="number-pad"
-                  value={inventoryInput}
-                  onChangeText={setInventoryInput}
-                  textAlign="center"
-                />
-                <TouchableOpacity
-                  style={[
-                    styles.adjustCircle,
-                    { backgroundColor: theme.surface },
-                  ]}
-                  onPress={() => adjustInventory(10)}
-                >
-                  <Text
-                    style={[styles.adjustCircleText, { color: theme.textMain }]}
-                  >
-                    +10
-                  </Text>
-                </TouchableOpacity>
-              </View>
-
-              <TouchableOpacity
-                style={[
-                  styles.submitBtn,
-                  { backgroundColor: theme.primary },
-                  isUpdating && { opacity: 0.7 },
-                ]}
-                activeOpacity={0.8}
-                onPress={submitInventoryUpdate}
-                disabled={isUpdating}
-              >
-                {isUpdating ? (
-                  <ActivityIndicator color="#FFF" />
-                ) : (
-                  <Text style={styles.submitBtnText}>Update Inventory</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </Modal>
+          currentAvailable={stats.totalAvailable}
+          onClose={() => setIsModalVisible(false)}
+          onSubmit={submitInventoryUpdate}
+        />
       )}
     </SafeAreaView>
   );
@@ -549,7 +416,6 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, paddingTop: Platform.OS === "android" ? 40 : 16 },
   scrollContent: { paddingHorizontal: SIZES.padding },
 
-  // Headers
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -653,7 +519,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
 
-  // Full Width Card
   fullWidthCard: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -676,7 +541,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 
-  // Grid Cards
   grid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -702,7 +566,6 @@ const styles = StyleSheet.create({
   },
   gridValue: { ...FONTS.header, fontSize: 28 },
 
-  // Admin Adjust Button
   adjustBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -717,78 +580,5 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     fontSize: 15,
     marginLeft: 10,
-  },
-
-  // Modal
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "center",
-    padding: SIZES.padding,
-  },
-  modalContent: { borderRadius: 24, padding: 24 },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 24,
-  },
-  modalTitle: { ...FONTS.header, fontSize: 22 },
-  readOnlyRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: 16,
-    borderRadius: SIZES.radius,
-    marginBottom: 24,
-  },
-  readOnlyLabel: { ...FONTS.body, fontSize: 14, fontWeight: "600" },
-  readOnlyValue: { ...FONTS.header, fontSize: 20 },
-  inputLabel: { ...FONTS.body, fontWeight: "600", marginBottom: 12 },
-  inputRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 32,
-  },
-  adjustCircle: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    justifyContent: "center",
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  adjustCircleText: { ...FONTS.body, fontWeight: "700", fontSize: 18 },
-  numberInput: {
-    flex: 1,
-    marginHorizontal: 16,
-    height: 50,
-    borderWidth: 1,
-    borderRadius: SIZES.radius,
-    ...FONTS.header,
-    fontSize: 20,
-  },
-  submitBtn: {
-    height: 56,
-    borderRadius: SIZES.radius,
-    justifyContent: "center",
-    alignItems: "center",
-    shadowColor: "#4F46E5",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  submitBtnText: {
-    color: "#FFF",
-    ...FONTS.body,
-    fontWeight: "700",
-    fontSize: 16,
-    letterSpacing: 0.5,
   },
 });
