@@ -5,6 +5,7 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
+  Image,
   Platform,
   RefreshControl,
   ScrollView,
@@ -403,6 +404,29 @@ export default function InventoryScreen({
               </TouchableOpacity>
             )}
 
+            <View style={styles.developerCredits}>
+              <Text style={[styles.creditsText, { color: theme.textMuted }]}>
+                FestFood Manager v1.0.0
+              </Text>
+
+              <View style={styles.developerRow}>
+                <Text
+                  style={[
+                    styles.creditsText,
+                    { color: theme.textMuted, marginBottom: 0 },
+                  ]}
+                >
+                  Developed by Ghost Team
+                </Text>
+
+                <Image
+                  source={require("../../assets/images/developer-icon.jpg")}
+                  style={styles.developerIcon}
+                  resizeMode="contain"
+                />
+              </View>
+            </View>
+
             <View style={{ height: 100 }} />
           </>
         )}
@@ -596,5 +620,29 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     fontSize: 15,
     marginLeft: 10,
+  },
+  developerCredits: {
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 40,
+    marginBottom: 10,
+  },
+  developerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 4,
+  },
+  developerIcon: {
+    width: 36,
+    height: 36,
+    marginHorizontal: 6,
+    borderRadius: 36,
+  },
+  creditsText: {
+    ...FONTS.body,
+    fontSize: 12,
+    letterSpacing: 0.5,
+    marginBottom: 4,
   },
 });

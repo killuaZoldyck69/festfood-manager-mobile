@@ -88,6 +88,30 @@ export default function GlobalLoginScreen() {
             Contact the University CSE Dept.
           </Text>
         </Text>
+
+        {/* --- DEVELOPER CREDITS --- */}
+        <View style={styles.developerCredits}>
+          <Text style={[styles.creditsText, { color: theme.textMuted }]}>
+            FestFood Manager v1.0.0
+          </Text>
+
+          <View style={styles.developerRow}>
+            <Text
+              style={[
+                styles.creditsText,
+                { color: theme.textMuted, marginBottom: 0 },
+              ]}
+            >
+              Developed by Ghost Team
+            </Text>
+
+            <Image
+              source={require("../../assets/images/developer-icon.jpg")}
+              style={styles.developerIcon}
+              resizeMode="contain"
+            />
+          </View>
+        </View>
       </View>
     </KeyboardAvoidingView>
   );
@@ -125,5 +149,25 @@ const styles = StyleSheet.create({
   },
   footerLink: {
     fontWeight: "600",
+  },
+  developerCredits: {
+    alignItems: "center",
+    marginTop: 50,
+  },
+  developerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 4,
+  },
+  developerIcon: {
+    width: 36,
+    height: 36,
+    marginHorizontal: 6,
+    borderRadius: 36,
+  },
+  creditsText: {
+    ...FONTS.body,
+    fontSize: 12,
+    letterSpacing: 0.5,
   },
 });
