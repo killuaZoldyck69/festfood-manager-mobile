@@ -29,6 +29,12 @@ export default function VolunteerList(): React.ReactElement {
   const [form, setForm] = useState({ name: "", email: "", password: "" });
   const [showPassword, setShowPassword] = useState<boolean>(false);
 
+  const [deleteModal, setDeleteModal] = useState<{
+    visible: boolean;
+    id: string;
+    name: string;
+  }>({ visible: false, id: "", name: "" });
+
   const fetchVolunteers = async (): Promise<void> => {
     setIsLoading(true);
     setErrorState(null);
@@ -81,38 +87,28 @@ export default function VolunteerList(): React.ReactElement {
     }
   };
 
-  const handleDeleteVolunteer = (id: string, name: string): void => {
-    Alert.alert(
-      "Remove Volunteer",
-      `Are you sure you want to remove ${name}?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Remove",
-          style: "destructive",
-          onPress: async () => {
-            setActionLoading(`DELETE_${id}`);
-            try {
-              const res = await apiClient(`/admin/volunteers/${id}`, {
-                method: "DELETE",
-              });
-              if (res.ok) {
-                setVolunteers((prev) => prev.filter((v) => v.id !== id));
-              } else {
-                throw new Error("Failed to delete volunteer.");
-              }
-            } catch (error) {
-              Alert.alert(
-                "Error",
-                error instanceof Error ? error.message : "Unknown error",
-              );
-            } finally {
-              setActionLoading(null);
-            }
-          },
-        },
-      ],
-    );
+  const confirmDelete = async (): Promise<void> => {
+    if (!deleteModal.id) return;
+    setActionLoading(`DELETE_${deleteModal.id}`);
+
+    try {
+      const res = await apiClient(`/admin/volunteers/${deleteModal.id}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        setVolunteers((prev) => prev.filter((v) => v.id !== deleteModal.id));
+        setDeleteModal({ visible: false, id: "", name: "" });
+      } else {
+        throw new Error("Failed to delete volunteer.");
+      }
+    } catch (error) {
+      Alert.alert(
+        "Error",
+        error instanceof Error ? error.message : "Unknown error",
+      );
+    } finally {
+      setActionLoading(null);
+    }
   };
 
   const closeModal = (): void => {
@@ -159,47 +155,82 @@ export default function VolunteerList(): React.ReactElement {
               { backgroundColor: theme.surface, borderColor: theme.border },
             ]}
           >
-            <View style={styles.volInfo}>
-              <Text style={[styles.volName, { color: theme.textMain }]}>
-                {vol.name}
-              </Text>
-              <Text style={[styles.volEmail, { color: theme.textMuted }]}>
-                {vol.email}
-              </Text>
-
-              <View style={styles.statsRow}>
-                <View
-                  style={[
-                    styles.statBadge,
-                    {
-                      backgroundColor: `${theme.textMuted}15`,
-                      paddingHorizontal: 8,
-                    },
-                  ]}
-                >
-                  <Text style={[styles.statText, { color: theme.textMuted }]}>
-                    Total Scans:{" "}
-                    <Text style={{ fontWeight: "800" }}>{vol.totalScans}</Text>
-                  </Text>
-                </View>
+            {/* Top Row: User Info & Actions */}
+            <View style={styles.cardHeaderRow}>
+              <View style={styles.volInfo}>
+                <Text style={[styles.volName, { color: theme.textMain }]}>
+                  {vol.name}
+                </Text>
+                <Text style={[styles.volEmail, { color: theme.textMuted }]}>
+                  {vol.email}
+                </Text>
               </View>
+
+              <TouchableOpacity
+                style={[
+                  styles.deleteBtn,
+                  { backgroundColor: `${theme.error}10` },
+                ]}
+                onPress={() =>
+                  setDeleteModal({ visible: true, id: vol.id, name: vol.name })
+                }
+                disabled={actionLoading === `DELETE_${vol.id}`}
+              >
+                {actionLoading === `DELETE_${vol.id}` ? (
+                  <ActivityIndicator size="small" color={theme.error} />
+                ) : (
+                  <Feather name="trash-2" size={16} color={theme.error} />
+                )}
+              </TouchableOpacity>
             </View>
 
-            <TouchableOpacity
-              style={styles.deleteBtn}
-              onPress={() => handleDeleteVolunteer(vol.id, vol.name)}
-              disabled={actionLoading === `DELETE_${vol.id}`}
-            >
-              {actionLoading === `DELETE_${vol.id}` ? (
-                <ActivityIndicator size="small" color={theme.error} />
-              ) : (
-                <Feather name="trash-2" size={20} color={theme.error} />
-              )}
-            </TouchableOpacity>
+            {/* Bottom Row: Detailed Statistics Grid */}
+            <View style={[styles.statsGrid, { borderTopColor: theme.border }]}>
+              <View style={styles.statBox}>
+                <Feather name="layers" size={14} color={theme.textMuted} />
+                <Text style={[styles.statValue, { color: theme.textMain }]}>
+                  {(vol as any).totalScans || 0}
+                </Text>
+                <Text style={[styles.statLabel, { color: theme.textMuted }]}>
+                  Total
+                </Text>
+              </View>
+
+              <View style={styles.statBox}>
+                <Feather name="check-circle" size={14} color={theme.success} />
+                <Text style={[styles.statValue, { color: theme.textMain }]}>
+                  {(vol as any).successScans || 0}
+                </Text>
+                <Text style={[styles.statLabel, { color: theme.textMuted }]}>
+                  Success
+                </Text>
+              </View>
+
+              <View style={styles.statBox}>
+                <Feather name="copy" size={14} color={theme.error} />
+                <Text style={[styles.statValue, { color: theme.textMain }]}>
+                  {(vol as any).duplicateScans || 0}
+                </Text>
+                <Text style={[styles.statLabel, { color: theme.textMuted }]}>
+                  Dupe
+                </Text>
+              </View>
+
+              <View style={styles.statBox}>
+                <Feather name="alert-triangle" size={14} color="#F59E0B" />
+                <Text style={[styles.statValue, { color: theme.textMain }]}>
+                  {(vol as any).invalidScans || 0}
+                </Text>
+                <Text style={[styles.statLabel, { color: theme.textMuted }]}>
+                  Invalid
+                </Text>
+              </View>
+            </View>
           </View>
         ))
       )}
 
+      {/* --- ADD VOLUNTEER MODAL --- */}
       <Modal
         visible={modalVisible}
         transparent={true}
@@ -293,6 +324,83 @@ export default function VolunteerList(): React.ReactElement {
           </View>
         </View>
       </Modal>
+
+      {/* --- DELETE CONFIRMATION MODAL --- */}
+      <Modal
+        animationType="fade"
+        transparent
+        visible={deleteModal.visible}
+        onRequestClose={() => {
+          if (!actionLoading)
+            setDeleteModal({ ...deleteModal, visible: false });
+        }}
+      >
+        <View style={styles.centerModalOverlay}>
+          <View
+            style={[
+              styles.confirmModalCard,
+              { backgroundColor: theme.background },
+            ]}
+          >
+            <View
+              style={[
+                styles.warningIconBg,
+                { backgroundColor: `${theme.error}15` },
+              ]}
+            >
+              <Feather name="user-x" size={32} color={theme.error} />
+            </View>
+
+            <Text
+              style={[
+                styles.confirmModalTitle,
+                { color: theme.textMain, textAlign: "center" },
+              ]}
+            >
+              Remove Volunteer?
+            </Text>
+
+            <Text style={[styles.confirmModalText, { color: theme.textMuted }]}>
+              Are you sure you want to revoke access for{" "}
+              <Text style={{ fontWeight: "700", color: theme.textMain }}>
+                {deleteModal.name}
+              </Text>
+              ? Their past scan records will remain, but they will no longer be
+              able to log in.
+            </Text>
+
+            <View style={styles.confirmModalActions}>
+              <TouchableOpacity
+                style={[
+                  styles.confirmBtn,
+                  styles.cancelBtn,
+                  { borderColor: theme.border },
+                ]}
+                onPress={() =>
+                  setDeleteModal({ ...deleteModal, visible: false })
+                }
+                disabled={!!actionLoading}
+              >
+                <Text style={[styles.cancelBtnText, { color: theme.textMain }]}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.confirmBtn, { backgroundColor: theme.error }]}
+                onPress={confirmDelete}
+                disabled={!!actionLoading}
+              >
+                {actionLoading ? (
+                  <ActivityIndicator color="#FFF" />
+                ) : (
+                  <Text style={styles.acceptBtnText}>Remove</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -327,36 +435,57 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   volunteerCard: {
-    flexDirection: "row",
+    flexDirection: "column",
     padding: 16,
     borderRadius: SIZES.radius,
     borderWidth: 1,
-    marginBottom: 12,
-    alignItems: "center",
+    marginBottom: 14,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  cardHeaderRow: {
+    flexDirection: "row",
     justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 16,
   },
-  volInfo: { flex: 1 },
-  volName: { ...FONTS.body, fontWeight: "700", fontSize: 16, marginBottom: 4 },
-  volEmail: { ...FONTS.muted, fontSize: 13, marginBottom: 12 },
-  statsRow: {
-    flexDirection: "row",
+  volInfo: { flex: 1, paddingRight: 10 },
+  volName: { ...FONTS.body, fontWeight: "700", fontSize: 16, marginBottom: 2 },
+  volEmail: { ...FONTS.muted, fontSize: 13 },
+  deleteBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: "center",
-    flexWrap: "wrap",
-    gap: 8,
+    justifyContent: "center",
   },
-  statBadge: {
+  statsGrid: {
     flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 6,
-    paddingVertical: 4,
-    borderRadius: 6,
+    justifyContent: "space-between",
+    paddingTop: 16,
+    borderTopWidth: 1,
   },
-  statText: {
+  statBox: {
+    alignItems: "center",
+    flex: 1,
+  },
+  statValue: {
     ...FONTS.body,
-    fontSize: 11,
-    fontWeight: "600",
+    fontSize: 15,
+    fontWeight: "800",
+    marginTop: 6,
+    marginBottom: 2,
   },
-  deleteBtn: { padding: 8 },
+  statLabel: {
+    ...FONTS.body,
+    fontSize: 10,
+    fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
@@ -413,5 +542,56 @@ const styles = StyleSheet.create({
     ...FONTS.body,
     fontWeight: "700",
     fontSize: 16,
+  },
+
+  centerModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: SIZES.padding,
+  },
+  confirmModalCard: {
+    width: "100%",
+    padding: 24,
+    borderRadius: 24,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 10,
+  },
+  warningIconBg: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  confirmModalTitle: { ...FONTS.header, fontSize: 22, marginBottom: 8 },
+  confirmModalText: {
+    ...FONTS.body,
+    fontSize: 15,
+    textAlign: "center",
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  confirmModalActions: { flexDirection: "row", width: "100%", gap: 12 },
+  confirmBtn: {
+    flex: 1,
+    height: 50,
+    borderRadius: SIZES.radius,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  cancelBtn: { borderWidth: 1 },
+  cancelBtnText: { ...FONTS.body, fontWeight: "600", fontSize: 15 },
+  acceptBtnText: {
+    color: "#FFF",
+    ...FONTS.body,
+    fontWeight: "700",
+    fontSize: 15,
   },
 });

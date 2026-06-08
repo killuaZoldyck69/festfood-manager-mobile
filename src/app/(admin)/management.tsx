@@ -11,6 +11,7 @@ import { apiClient } from "../../utils/apiClient";
 export default function AdminManagementScreen(): React.ReactElement {
   const theme = useTheme();
   const [hasAttendees, setHasAttendees] = useState<boolean>(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useFocusEffect(
     useCallback(() => {
@@ -50,9 +51,13 @@ export default function AdminManagementScreen(): React.ReactElement {
           onAttendeesUpdated={() => setHasAttendees(true)}
         />
 
-        <VolunteerList />
+        {/* Passing the key forces VolunteerList to re-mount/refresh when refreshKey changes */}
+        <VolunteerList key={refreshKey} />
 
-        <DangerZone onAttendeesWiped={() => setHasAttendees(false)} />
+        <DangerZone
+          onAttendeesWiped={() => setHasAttendees(false)}
+          onVolunteersWiped={() => setRefreshKey((prev) => prev + 1)}
+        />
       </ScrollView>
     </View>
   );
@@ -63,9 +68,9 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingTop: Platform.OS === "android" ? 40 : 24,
     paddingHorizontal: SIZES.padding,
-    paddingBottom: 60,
+    paddingBottom: 40,
   },
   header: { marginBottom: 24 },
-  title: { ...FONTS.header, fontSize: 28, marginBottom: 8 },
-  subtitle: { ...FONTS.body, lineHeight: 22 },
+  title: { ...FONTS.header, fontSize: 28 },
+  subtitle: { ...FONTS.body, fontSize: 14, marginTop: 4 },
 });

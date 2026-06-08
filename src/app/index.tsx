@@ -1,7 +1,7 @@
 import { InputField } from "@/components/ui/InputField";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
 import { FONTS } from "@/constants/theme";
-import { useAuth } from "@/context/AuthContext"; // <-- Import useAuth
+import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/use-theme";
 import { useState } from "react";
 import {

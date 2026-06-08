@@ -14,25 +14,26 @@ import { apiClient } from "../../utils/apiClient";
 
 interface DangerZoneProps {
   onAttendeesWiped: () => void;
+  onVolunteersWiped: () => void;
 }
 
 export default function DangerZone({
   onAttendeesWiped,
+  onVolunteersWiped,
 }: DangerZoneProps): React.ReactElement {
   const theme = useTheme();
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  // Modal State
   const [modalConfig, setModalConfig] = useState<{
     visible: boolean;
     title: string;
     message: string;
-    actionType: "RESET_LOGISTICS" | "WIPE_ATTENDEES" | null;
+    actionType: "RESET_LOGISTICS" | "WIPE_ATTENDEES" | "WIPE_VOLUNTEERS" | null;
   }>({ visible: false, title: "", message: "", actionType: null });
 
   const confirmAction = async () => {
     const { actionType } = modalConfig;
-    setModalConfig({ ...modalConfig, visible: false }); // Hide modal
+    setModalConfig({ ...modalConfig, visible: false });
 
     if (!actionType) return;
     setActionLoading(actionType);
@@ -42,17 +43,20 @@ export default function DangerZone({
         const res = await apiClient("/admin/logistics/reset", {
           method: "POST",
         });
-        if (!res.ok) throw new Error("Failed to reset inventory.");
+        if (!res.ok) throw new Error("Failed");
       } else if (actionType === "WIPE_ATTENDEES") {
         const res = await apiClient("/admin/attendees/wipe", {
           method: "DELETE",
         });
-        if (!res.ok) throw new Error("Failed to wipe attendees.");
-        onAttendeesWiped();
+        if (res.ok) onAttendeesWiped();
+      } else if (actionType === "WIPE_VOLUNTEERS") {
+        const res = await apiClient("/admin/volunteers/wipe", {
+          method: "DELETE",
+        });
+        if (res.ok) onVolunteersWiped();
       }
     } catch (error) {
-      // In a full app you might show an error modal here, but for danger zone keeping it simple
-      console.log(error);
+      console.error(error);
     } finally {
       setActionLoading(null);
     }
@@ -107,7 +111,7 @@ export default function DangerZone({
             visible: true,
             title: "WIPE ALL ATTENDEES?",
             message:
-              "CRITICAL WARNING: This deletes ALL attendees and scan logs entirely from the database. Proceed?",
+              "CRITICAL WARNING: This deletes ALL attendees and their scan logs entirely from the database. Proceed?",
             actionType: "WIPE_ATTENDEES",
           })
         }
@@ -117,9 +121,38 @@ export default function DangerZone({
           <ActivityIndicator color="#FFF" />
         ) : (
           <>
-            <Feather name="alert-triangle" size={20} color="#FFF" />
+            <Feather name="users" size={20} color="#FFF" />
             <Text style={[styles.dangerButtonText, { color: "#FFF" }]}>
               Wipe All Attendees
+            </Text>
+          </>
+        )}
+      </TouchableOpacity>
+
+      {/* --- NEW VOLUNTEER WIPE BUTTON --- */}
+      <TouchableOpacity
+        style={[
+          styles.dangerButton,
+          { backgroundColor: "#000", borderColor: "#000" },
+        ]}
+        onPress={() =>
+          setModalConfig({
+            visible: true,
+            title: "WIPE ALL VOLUNTEERS?",
+            message:
+              "This will hard delete all volunteer accounts and their scan logs. Proceed?",
+            actionType: "WIPE_VOLUNTEERS",
+          })
+        }
+        disabled={!!actionLoading}
+      >
+        {actionLoading === "WIPE_VOLUNTEERS" ? (
+          <ActivityIndicator color="#FFF" />
+        ) : (
+          <>
+            <Feather name="user-x" size={20} color="#FFF" />
+            <Text style={[styles.dangerButtonText, { color: "#FFF" }]}>
+              Wipe All Volunteers
             </Text>
           </>
         )}
@@ -209,8 +242,6 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   dangerButtonText: { ...FONTS.body, fontWeight: "700", marginLeft: 10 },
-
-  // Modal Styles
   centerModalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
