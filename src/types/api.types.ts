@@ -47,6 +47,7 @@ export interface FormattedLog {
   studentId: string | null;
   category: string | null;
   university: string | null;
+  semester: string | null;
   section: string | null;
 }
 

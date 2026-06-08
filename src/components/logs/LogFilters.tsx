@@ -34,6 +34,8 @@ interface LogFiltersProps {
   setSelectedVolunteerEmail: (val: string) => void;
   filterOptions: LogFilterAggregation;
   clearFilters: () => void;
+  hideAdvancedFilters?: boolean;
+  hideManualOverrideTab?: boolean;
 }
 
 export default function LogFilters({
@@ -47,6 +49,8 @@ export default function LogFilters({
   setSelectedVolunteerEmail,
   filterOptions,
   clearFilters,
+  hideAdvancedFilters = false,
+  hideManualOverrideTab = false,
 }: LogFiltersProps): React.ReactElement {
   const theme = useTheme();
 
@@ -93,36 +97,44 @@ export default function LogFilters({
           )}
         </View>
 
-        <TouchableOpacity
-          style={[styles.advancedToggleBtn, { backgroundColor: theme.surface }]}
-          onPress={() => {
-            setShowAdvanced(!showAdvanced);
-            setIsVolDropdownOpen(false);
-          }}
-        >
-          <View>
-            <Ionicons
-              name={hasActiveFilters ? "funnel" : "funnel-outline"}
-              size={20}
-              color={
-                hasActiveFilters || showAdvanced
-                  ? theme.primary
-                  : theme.textMuted
-              }
-            />
-            {hasActiveFilters && (
-              <View
-                style={[
-                  styles.activeDot,
-                  { backgroundColor: theme.error, borderColor: theme.surface },
-                ]}
+        {!hideAdvancedFilters && (
+          <TouchableOpacity
+            style={[
+              styles.advancedToggleBtn,
+              { backgroundColor: theme.surface },
+            ]}
+            onPress={() => {
+              setShowAdvanced(!showAdvanced);
+              setIsVolDropdownOpen(false);
+            }}
+          >
+            <View>
+              <Ionicons
+                name={hasActiveFilters ? "funnel" : "funnel-outline"}
+                size={20}
+                color={
+                  hasActiveFilters || showAdvanced
+                    ? theme.primary
+                    : theme.textMuted
+                }
               />
-            )}
-          </View>
-        </TouchableOpacity>
+              {hasActiveFilters && (
+                <View
+                  style={[
+                    styles.activeDot,
+                    {
+                      backgroundColor: theme.error,
+                      borderColor: theme.surface,
+                    },
+                  ]}
+                />
+              )}
+            </View>
+          </TouchableOpacity>
+        )}
       </View>
 
-      {showAdvanced && (
+      {showAdvanced && !hideAdvancedFilters && (
         <View
           style={[
             styles.advancedPanelBody,
@@ -255,7 +267,7 @@ export default function LogFilters({
                   const displayText =
                     vol.name === "ALL"
                       ? "All Volunteers"
-                      : `${index + 1}. ${vol.name} (${vol.email}) - ${vol.count} scans`;
+                      : `${index}. ${vol.name} (${vol.email}) - ${vol.count} scans`;
 
                   return (
                     <TouchableOpacity
@@ -309,40 +321,44 @@ export default function LogFilters({
             { id: "DUPLICATE", icon: "copy", activeColor: theme.error },
             { id: "INVALID", icon: "alert-triangle", activeColor: "#D97706" },
             { id: "MANUAL_OVERRIDE", icon: "edit-3", activeColor: "#8B5CF6" },
-          ].map((tab) => {
-            const isActive = activeTab === tab.id;
-            return (
-              <TouchableOpacity
-                key={tab.id}
-                style={[
-                  styles.tab,
-                  { backgroundColor: theme.surface },
-                  isActive && { backgroundColor: `${tab.activeColor}15` },
-                ]}
-                onPress={() => {
-                  if (!isActive) setActiveTab(tab.id as FilterTab);
-                }}
-              >
-                <Feather
-                  name={tab.icon as any}
-                  size={14}
-                  color={isActive ? tab.activeColor : theme.textMuted}
-                  style={{ marginRight: 6 }}
-                />
-                <Text
+          ]
+            .filter(
+              (tab) => !(hideManualOverrideTab && tab.id === "MANUAL_OVERRIDE"),
+            )
+            .map((tab) => {
+              const isActive = activeTab === tab.id;
+              return (
+                <TouchableOpacity
+                  key={tab.id}
                   style={[
-                    styles.tabText,
-                    {
-                      color: isActive ? tab.activeColor : theme.textMuted,
-                      fontWeight: isActive ? "800" : "600",
-                    },
+                    styles.tab,
+                    { backgroundColor: theme.surface },
+                    isActive && { backgroundColor: `${tab.activeColor}15` },
                   ]}
+                  onPress={() => {
+                    if (!isActive) setActiveTab(tab.id as FilterTab);
+                  }}
                 >
-                  {tab.id.replace("_", " ")}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
+                  <Feather
+                    name={tab.icon as any}
+                    size={14}
+                    color={isActive ? tab.activeColor : theme.textMuted}
+                    style={{ marginRight: 6 }}
+                  />
+                  <Text
+                    style={[
+                      styles.tabText,
+                      {
+                        color: isActive ? tab.activeColor : theme.textMuted,
+                        fontWeight: isActive ? "800" : "600",
+                      },
+                    ]}
+                  >
+                    {tab.id.replace("_", " ")}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
         </ScrollView>
       </View>
     </View>

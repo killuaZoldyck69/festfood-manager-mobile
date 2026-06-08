@@ -23,6 +23,11 @@ import { formatTime } from "../utils/formatDate";
 interface ScanData {
   name?: string;
   category?: string;
+  email?: string;
+  studentId?: string;
+  semester?: string;
+  section?: string;
+  university?: string;
   claimedAt?: string;
 }
 
@@ -85,19 +90,26 @@ export default function ScannerScreen({
 
       const responseData = await response.json();
 
+      const attendeeData: ScanData = {
+        name: responseData.attendee?.name || "Unknown Attendee",
+        category: responseData.attendee?.category || "General",
+        email: responseData.attendee?.email,
+        studentId: responseData.attendee?.studentId,
+        semester: responseData.attendee?.semester,
+        section: responseData.attendee?.section,
+        university: responseData.attendee?.university,
+        claimedAt: responseData.attendee?.claimedAt,
+      };
+
       switch (responseData?.status) {
         case "SUCCESS":
-          setScanData({
-            name: responseData.attendee?.name || "Unknown Attendee",
-            category: responseData.attendee?.category || "General",
-          });
+          setScanData(attendeeData);
           setStatus("SUCCESS");
           break;
         case "DUPLICATE":
           setScanData({
-            name: responseData.attendee?.name || "Unknown Attendee",
-            claimedAt:
-              responseData.attendee?.claimedAt || new Date().toISOString(),
+            ...attendeeData,
+            claimedAt: attendeeData.claimedAt || new Date().toISOString(),
           });
           setStatus("DUPLICATE");
           break;
@@ -121,83 +133,56 @@ export default function ScannerScreen({
     setErrorState(null);
   };
 
-  return (
-    <View style={styles.container}>
-      <CameraView
-        style={StyleSheet.absoluteFillObject}
-        facing="back"
-        barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
-        onBarcodeScanned={status === "IDLE" ? handleBarcodeScanned : undefined}
-      >
-        <View style={styles.overlay}>
-          <View style={styles.unfocusedContainer} />
-          <View style={styles.middleContainer}>
-            <View style={styles.unfocusedContainer} />
-            <View style={styles.focusedContainer}>
-              <View
-                style={[
-                  styles.corner,
-                  styles.topLeft,
-                  { borderColor: theme.primary },
-                ]}
-              />
-              <View
-                style={[
-                  styles.corner,
-                  styles.topRight,
-                  { borderColor: theme.primary },
-                ]}
-              />
-              <View
-                style={[
-                  styles.corner,
-                  styles.bottomLeft,
-                  { borderColor: theme.primary },
-                ]}
-              />
-              <View
-                style={[
-                  styles.corner,
-                  styles.bottomRight,
-                  { borderColor: theme.primary },
-                ]}
-              />
-
-              {status === "PROCESSING" && (
-                <View style={styles.processingOverlay}>
-                  <ActivityIndicator size="large" color={theme.primary} />
-                  <Text
-                    style={[styles.processingText, { color: theme.primary }]}
-                  >
-                    Verifying...
-                  </Text>
-                </View>
-              )}
-            </View>
-            <View style={styles.unfocusedContainer} />
-          </View>
-          <View style={styles.unfocusedContainer}>
-            <Text style={styles.instructionText}>
-              Align the QR code within the frame to scan.
-            </Text>
-            <Text
-              style={[
-                styles.instructionText,
-                { fontSize: 12, marginTop: 8, opacity: 0.7 },
-              ]}
-            >
-              Logged in as: {role}
-            </Text>
-          </View>
+  const renderAttendeeDetails = () => (
+    <View style={styles.detailsBlock}>
+      {scanData.email && (
+        <View style={styles.detailRow}>
+          <Feather
+            name="mail"
+            size={14}
+            color="#6B7280"
+            style={styles.detailIcon}
+          />
+          <Text style={styles.detailText} numberOfLines={1}>
+            {scanData.email}
+          </Text>
         </View>
-      </CameraView>
+      )}
+      {scanData.studentId && (
+        <View style={styles.detailRow}>
+          <Feather
+            name="credit-card"
+            size={14}
+            color="#6B7280"
+            style={styles.detailIcon}
+          />
+          <Text style={styles.detailText}>
+            ID: {scanData.studentId}
+            {scanData.semester ? `  •  Sem: ${scanData.semester}` : ""}
+            {scanData.section ? `  •  Sec: ${scanData.section}` : ""}
+          </Text>
+        </View>
+      )}
+      {scanData.university && (
+        <View style={styles.detailRow}>
+          <Feather
+            name="map-pin"
+            size={14}
+            color="#6B7280"
+            style={styles.detailIcon}
+          />
+          <Text style={styles.detailText} numberOfLines={1}>
+            {scanData.university}
+          </Text>
+        </View>
+      )}
+    </View>
+  );
 
-      <Modal
-        visible={status !== "IDLE" && status !== "PROCESSING"}
-        animationType="fade"
-        transparent={false}
-      >
-        {status === "SUCCESS" && (
+  const renderOutcomeContent = () => {
+    switch (status) {
+      case "SUCCESS":
+        return (
           <Pressable
             style={[styles.outcomeContainer, { backgroundColor: "#10B981" }]}
             onPress={resetScanner}
@@ -210,9 +195,12 @@ export default function ScannerScreen({
             <View style={styles.outcomeCard}>
               <Text style={styles.outcomeCardEyebrow}>GIVE FOOD TO:</Text>
               <Text style={styles.outcomeCardName}>{scanData.name}</Text>
+
+              {renderAttendeeDetails()}
+
               <View style={styles.divider} />
               <View style={styles.cardFooter}>
-                <Ionicons name="calendar-outline" size={16} color="#6B7280" />
+                <Ionicons name="pricetag-outline" size={16} color="#6B7280" />
                 <Text style={styles.outcomeCardSubtitle}>
                   {scanData.category}
                 </Text>
@@ -221,33 +209,32 @@ export default function ScannerScreen({
 
             <Text style={styles.tapToDismiss}>Tap anywhere to scan next</Text>
           </Pressable>
-        )}
-
-        {status === "DUPLICATE" && (
+        );
+      case "DUPLICATE":
+        return (
           <Pressable
             style={[styles.outcomeContainer, { backgroundColor: "#EF4444" }]}
             onPress={resetScanner}
           >
             <Feather
               name="x"
-              size={100}
+              size={80}
               color="#FFF"
-              style={{ marginBottom: 16 }}
+              style={{ marginBottom: 12 }}
             />
-            <Text style={styles.outcomeTitle}>STOP!</Text>
+            <Text style={[styles.outcomeTitle, { marginBottom: 24 }]}>
+              STOP!
+            </Text>
 
             <View style={styles.outcomeCard}>
               <Text style={[styles.outcomeCardEyebrow, { color: "#EF4444" }]}>
                 Ticket already claimed by:
               </Text>
-              <View style={styles.userRow}>
-                <View
-                  style={[styles.dummyAvatar, { backgroundColor: "#EEF2FF" }]}
-                >
-                  <Ionicons name="person" size={20} color="#4F46E5" />
-                </View>
-                <Text style={styles.outcomeCardName}>{scanData.name}</Text>
-              </View>
+              <Text style={styles.outcomeCardName}>{scanData.name}</Text>
+
+              {renderAttendeeDetails()}
+
+              <View style={styles.divider} />
               <View style={styles.cardFooter}>
                 <Feather name="clock" size={16} color="#6B7280" />
                 <Text
@@ -263,16 +250,16 @@ export default function ScannerScreen({
 
             <Text style={styles.tapToDismiss}>Tap anywhere to dismiss</Text>
           </Pressable>
-        )}
-
-        {status === "INVALID" && (
+        );
+      case "INVALID":
+        return (
           <Pressable
             style={[styles.outcomeContainer, { backgroundColor: "#F59E0B" }]}
             onPress={resetScanner}
           >
             <Ionicons
               name="warning-outline"
-              size={120}
+              size={100}
               color="#FFF"
               style={{ marginBottom: 16 }}
             />
@@ -312,9 +299,9 @@ export default function ScannerScreen({
 
             <Text style={styles.tapToDismiss}>TAP ANYWHERE TO DISMISS</Text>
           </Pressable>
-        )}
-
-        {status === "DEPLETED" && (
+        );
+      case "DEPLETED":
+        return (
           <Pressable
             style={[styles.outcomeContainer, { backgroundColor: "#334155" }]}
             onPress={resetScanner}
@@ -360,9 +347,9 @@ export default function ScannerScreen({
 
             <Text style={styles.tapToDismiss}>TAP ANYWHERE TO DISMISS</Text>
           </Pressable>
-        )}
-
-        {status === "ERROR" && (
+        );
+      case "ERROR":
+        return (
           <Pressable
             style={[styles.outcomeContainer, { backgroundColor: theme.error }]}
             onPress={resetScanner}
@@ -391,7 +378,82 @@ export default function ScannerScreen({
 
             <Text style={styles.tapToDismiss}>TAP ANYWHERE TO RETRY</Text>
           </Pressable>
-        )}
+        );
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <View style={styles.container}>
+      <CameraView
+        style={StyleSheet.absoluteFill}
+        facing="back"
+        barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
+        onBarcodeScanned={status === "IDLE" ? handleBarcodeScanned : undefined}
+      />
+
+      <View style={[StyleSheet.absoluteFill, styles.overlay]}>
+        <View style={styles.unfocusedContainer} />
+
+        <View style={styles.middleContainer}>
+          <View style={styles.unfocusedContainer} />
+          <View style={styles.focusedContainer}>
+            <View
+              style={[
+                styles.corner,
+                styles.topLeft,
+                { borderColor: theme.primary },
+              ]}
+            />
+            <View
+              style={[
+                styles.corner,
+                styles.topRight,
+                { borderColor: theme.primary },
+              ]}
+            />
+            <View
+              style={[
+                styles.corner,
+                styles.bottomLeft,
+                { borderColor: theme.primary },
+              ]}
+            />
+            <View
+              style={[
+                styles.corner,
+                styles.bottomRight,
+                { borderColor: theme.primary },
+              ]}
+            />
+
+            {status === "PROCESSING" && (
+              <View style={styles.processingOverlay}>
+                <ActivityIndicator size="large" color={theme.primary} />
+                <Text style={[styles.processingText, { color: theme.primary }]}>
+                  Verifying...
+                </Text>
+              </View>
+            )}
+          </View>
+          <View style={styles.unfocusedContainer} />
+        </View>
+
+        <View style={[styles.unfocusedContainer, styles.bottomTextContainer]}>
+          <Text style={styles.instructionText}>
+            Align the QR code within the frame to scan.
+          </Text>
+          <Text style={styles.roleText}>Logged in as: {role}</Text>
+        </View>
+      </View>
+
+      <Modal
+        visible={status !== "IDLE" && status !== "PROCESSING"}
+        animationType="fade"
+        transparent={false}
+      >
+        {renderOutcomeContent()}
       </Modal>
     </View>
   );
@@ -418,16 +480,33 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
 
-  overlay: { flex: 1 },
+  overlay: { flex: 1, zIndex: 10 },
   unfocusedContainer: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)" },
   middleContainer: { flexDirection: "row", height: 280 },
   focusedContainer: { width: 280, height: 280, position: "relative" },
+
+  // FIX: Push text directly under the scanning box so it evades the FAB
+  bottomTextContainer: {
+    justifyContent: "flex-start",
+    alignItems: "center",
+    paddingTop: 32,
+  },
   instructionText: {
     color: "#FFF",
     ...FONTS.body,
     textAlign: "center",
-    marginTop: 40,
     fontSize: 16,
+    marginBottom: 8,
+  },
+  roleText: {
+    color: "#FFF",
+    ...FONTS.body,
+    textAlign: "center",
+    fontSize: 13,
+    opacity: 0.7,
+    fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: 1,
   },
 
   corner: { position: "absolute", width: 40, height: 40, borderWidth: 4 },
@@ -476,22 +555,22 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   outcomeIconWrapper: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
     borderWidth: 6,
     borderColor: "#FFF",
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 24,
+    marginBottom: 20,
   },
   outcomeTitle: {
     color: "#FFF",
     fontFamily: "System",
     fontWeight: "900",
-    fontSize: 36,
+    fontSize: 32,
     letterSpacing: 1,
-    marginBottom: 40,
+    marginBottom: 30,
   },
 
   outcomeCard: {
@@ -519,9 +598,31 @@ const styles = StyleSheet.create({
     color: "#111827",
     fontFamily: "System",
     fontWeight: "800",
-    fontSize: 26,
+    fontSize: 24,
     textAlign: "center",
     marginBottom: 20,
+  },
+
+  detailsBlock: {
+    backgroundColor: "#F9FAFB",
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 20,
+    gap: 12,
+  },
+  detailRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  detailIcon: {
+    width: 20,
+  },
+  detailText: {
+    color: "#4B5563",
+    ...FONTS.body,
+    fontSize: 14,
+    fontWeight: "500",
+    flex: 1,
   },
 
   divider: {
@@ -538,24 +639,11 @@ const styles = StyleSheet.create({
   outcomeCardSubtitle: {
     color: "#4B5563",
     fontFamily: "System",
-    fontWeight: "500",
+    fontWeight: "600",
     fontSize: 15,
     marginLeft: 8,
-  },
-
-  userRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 20,
-  },
-  dummyAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 12,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
 
   tapToDismiss: {

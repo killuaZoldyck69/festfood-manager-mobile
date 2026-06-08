@@ -137,6 +137,7 @@ export default function InventoryScreen({
 
   return (
     <SafeAreaView
+      edges={["top", "left", "right"]}
       style={[styles.safeArea, { backgroundColor: theme.background }]}
     >
       <View style={styles.header}>
@@ -154,17 +155,24 @@ export default function InventoryScreen({
         </View>
 
         <View style={styles.headerRight}>
-          <View
-            style={[styles.userPill, { backgroundColor: `${theme.primary}15` }]}
-          >
+          <View style={styles.userInfoStack}>
             <Text
-              style={[styles.userName, { color: theme.primary }]}
+              style={[styles.userName, { color: theme.textMain }]}
               numberOfLines={1}
             >
               {user?.name || "User"}
             </Text>
+            <Text
+              style={[styles.userEmail, { color: theme.textMuted }]}
+              numberOfLines={1}
+            >
+              {user?.email || "No email"}
+            </Text>
             <View
-              style={[styles.roleBadge, { backgroundColor: theme.primary }]}
+              style={[
+                styles.roleBadge,
+                { backgroundColor: theme.primary, alignSelf: "flex-start" },
+              ]}
             >
               <Text style={styles.roleBadgeText}>{role}</Text>
             </View>
@@ -445,24 +453,32 @@ const styles = StyleSheet.create({
     marginRight: 12,
     maxWidth: 160,
   },
+  userInfoStack: {
+    marginRight: 12,
+    justifyContent: "center",
+    maxWidth: 150,
+  },
   userName: {
     ...FONTS.body,
-    fontSize: 13,
-    fontWeight: "700",
-    marginRight: 8,
-    flexShrink: 1,
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  userEmail: {
+    ...FONTS.body,
+    fontSize: 11,
+    marginBottom: 4,
   },
   roleBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 16,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
   },
   roleBadgeText: {
     color: "#FFF",
     ...FONTS.body,
-    fontSize: 10,
-    fontWeight: "800",
-    letterSpacing: 0.5,
+    fontSize: 9,
+    fontWeight: "900",
+    textTransform: "uppercase",
   },
   logoutBtn: { padding: 4 },
 

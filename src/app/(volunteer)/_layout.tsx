@@ -24,6 +24,7 @@ export default function VolunteerLayout() {
       <Tabs.Screen
         name="scanner"
         options={{
+          headerShown: false,
           title: "Scan QR Ticket",
           tabBarLabel: "SCAN",
           tabBarLabelStyle: {
