@@ -4,29 +4,25 @@
     "slug": "fest-food-manager",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/my-custom-icon.png",
+    "icon": "./assets/images/icon.png",
     "scheme": "festfoodmanagermobile",
     "userInterfaceStyle": "light",
     "ios": {
-      "icon": "./assets/images/my-custom-icon.png"
+      "bundleIdentifier": "com.killuazoldycksorganization.festfoodmanager",
+      "supportsTablet": true
     },
     "android": {
-      "adaptiveIcon": {
-        "backgroundColor": "#FFFFFF",
-        "foregroundImage": "./assets/images/my-custom-icon.png",
-        "backgroundImage": "./assets/images/my-custom-icon.png",
-        "monochromeImage": "./assets/images/my-custom-icon.png"
-      },
-      "predictiveBackGestureEnabled": false,
       "package": "com.killuazoldycksorganization.festfoodmanager",
-      "permissions": [
-        "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO"
-      ]
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/icon.png",
+        "backgroundColor": "#FFFFFF"
+      },
+      "permissions": ["android.permission.CAMERA"]
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/icon.png",
+      "bundler": "metro"
     },
     "plugins": [
       "expo-router",
@@ -34,10 +30,8 @@
         "expo-splash-screen",
         {
           "backgroundColor": "#208AEF",
-          "android": {
-            "image": "./assets/images/splash-icon.png",
-            "imageWidth": 76
-          }
+          "image": "./assets/images/splash.png",
+          "imageWidth": 200
         }
       ],
       "expo-secure-store",
@@ -46,7 +40,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow CSE Fest to access your camera to scan QR tickets."
+          "cameraPermission": "Allow FestFood Manager to access your camera to scan QR tickets."
         }
       ],
       [
