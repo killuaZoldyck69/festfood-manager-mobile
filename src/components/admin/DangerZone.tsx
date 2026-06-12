@@ -1,4 +1,6 @@
+import { QUERY_KEYS } from "@/constants/queryKeys";
 import { Feather } from "@expo/vector-icons";
+import { useQueryClient } from "@tanstack/react-query";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
@@ -8,6 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import Toast from "react-native-toast-message";
 import { FONTS, SIZES } from "../../constants/theme";
 import { useTheme } from "../../hooks/use-theme";
 import { apiClient } from "../../utils/apiClient";
@@ -23,6 +26,7 @@ export default function DangerZone({
 }: DangerZoneProps): React.ReactElement {
   const theme = useTheme();
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
   const [modalConfig, setModalConfig] = useState<{
     visible: boolean;
@@ -43,20 +47,59 @@ export default function DangerZone({
         const res = await apiClient("/admin/logistics/reset", {
           method: "POST",
         });
-        if (!res.ok) throw new Error("Failed");
+        if (res.ok) {
+          queryClient.invalidateQueries({ queryKey: QUERY_KEYS.inventory });
+
+          Toast.show({
+            type: "success",
+            text1: "Inventory Reset",
+            text2: "All food counts have been reset to zero.",
+            position: "bottom",
+          });
+        }
       } else if (actionType === "WIPE_ATTENDEES") {
         const res = await apiClient("/admin/attendees/wipe", {
           method: "DELETE",
         });
-        if (res.ok) onAttendeesWiped();
+        if (res.ok) {
+          onAttendeesWiped();
+
+          queryClient.invalidateQueries({ queryKey: ["attendees"] });
+          queryClient.invalidateQueries({
+            queryKey: QUERY_KEYS.attendeeFilters,
+          });
+          queryClient.invalidateQueries({ queryKey: QUERY_KEYS.inventory });
+          queryClient.invalidateQueries({ queryKey: ["logs"] });
+          queryClient.invalidateQueries({ queryKey: QUERY_KEYS.logFilters });
+
+          Toast.show({
+            type: "success",
+            text1: "Database Wiped",
+            text2: "All attendees have been permanently deleted.",
+            position: "bottom",
+          });
+        }
       } else if (actionType === "WIPE_VOLUNTEERS") {
         const res = await apiClient("/admin/volunteers/wipe", {
           method: "DELETE",
         });
-        if (res.ok) onVolunteersWiped();
+        if (res.ok) {
+          onVolunteersWiped();
+
+          queryClient.invalidateQueries({ queryKey: QUERY_KEYS.volunteers });
+          queryClient.invalidateQueries({ queryKey: ["logs"] });
+          queryClient.invalidateQueries({ queryKey: QUERY_KEYS.logFilters });
+
+          Toast.show({
+            type: "success",
+            text1: "Volunteers Removed",
+            text2: "All volunteer accounts have been permanently deleted.",
+            position: "bottom",
+          });
+        }
       }
     } catch (error) {
-      console.error(error);
+      console.error("Danger Zone Action Failed:", error);
     } finally {
       setActionLoading(null);
     }
@@ -129,7 +172,6 @@ export default function DangerZone({
         )}
       </TouchableOpacity>
 
-      {/* --- NEW VOLUNTEER WIPE BUTTON --- */}
       <TouchableOpacity
         style={[
           styles.dangerButton,

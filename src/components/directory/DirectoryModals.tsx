@@ -29,6 +29,26 @@ interface ModalsProps {
   handleManualClaim: () => void;
 }
 
+const InfoRow = ({ icon, label, value, theme, iconColor }: any) => {
+  if (!value) return null;
+
+  return (
+    <View style={styles.infoRowContainer}>
+      <View style={[styles.iconContainer, { backgroundColor: theme.surface }]}>
+        <Feather name={icon} size={18} color={iconColor || theme.primary} />
+      </View>
+      <View style={styles.infoContent}>
+        <Text style={[styles.infoLabel, { color: theme.textMuted }]}>
+          {label}
+        </Text>
+        <Text style={[styles.infoValue, { color: theme.textMain }]}>
+          {value}
+        </Text>
+      </View>
+    </View>
+  );
+};
+
 export default function DirectoryModals({
   selectedAttendee,
   setSelectedAttendee,
@@ -42,6 +62,7 @@ export default function DirectoryModals({
 
   return (
     <>
+      {/* 1. CONFIRM CLAIM MODAL */}
       <Modal
         animationType="fade"
         transparent
@@ -97,6 +118,7 @@ export default function DirectoryModals({
         </View>
       </Modal>
 
+      {/* 2. ERROR MODAL */}
       <Modal
         animationType="fade"
         transparent
@@ -168,6 +190,7 @@ export default function DirectoryModals({
         </View>
       </Modal>
 
+      {/* 3. ATTENDEE DETAILS MODAL */}
       <Modal
         animationType="slide"
         transparent
@@ -238,50 +261,52 @@ export default function DirectoryModals({
                       : "PENDING CLAIM"}
                   </Text>
                 </View>
+
                 <Text style={[styles.detailName, { color: theme.textMain }]}>
                   {selectedAttendee.name}
                 </Text>
-                <Text
-                  style={[styles.traceText, { color: theme.textMuted }]}
-                  numberOfLines={1}
-                >
-                  ID: {selectedAttendee.studentId}
-                </Text>
 
-                <Text
-                  style={[
-                    styles.traceText,
-                    {
-                      color: theme.textMuted,
-                      marginBottom:
-                        selectedAttendee.semester || selectedAttendee.section
-                          ? 0
-                          : 8,
-                    },
-                  ]}
-                  numberOfLines={1}
-                >
-                  {selectedAttendee.email}
-                </Text>
-
-                {(selectedAttendee.semester || selectedAttendee.section) && (
-                  <Text
-                    style={[
-                      styles.traceText,
-                      { color: theme.textMuted, marginBottom: 8 },
-                    ]}
-                    numberOfLines={1}
-                  >
-                    Semester: {selectedAttendee.semester || "N/A"} | Section:{" "}
-                    {selectedAttendee.section || "N/A"}
-                  </Text>
-                )}
-
-                <Text
-                  style={[styles.detailUniversity, { color: theme.textMuted }]}
-                >
-                  {selectedAttendee.university || "Unknown University"}
-                </Text>
+                {/* Professional Info Rows Component block */}
+                <View style={styles.infoCardsContainer}>
+                  <InfoRow
+                    icon="credit-card"
+                    label="Student ID"
+                    value={selectedAttendee.studentId}
+                    theme={theme}
+                  />
+                  <InfoRow
+                    icon="layers"
+                    label="Department"
+                    value={selectedAttendee.department || "N/A"}
+                    theme={theme}
+                  />
+                  <InfoRow
+                    icon="phone"
+                    label="Phone Number"
+                    value={selectedAttendee.phoneNumber || "N/A"}
+                    theme={theme}
+                  />
+                  <InfoRow
+                    icon="mail"
+                    label="Email Address"
+                    value={selectedAttendee.email}
+                    theme={theme}
+                  />
+                  {(selectedAttendee.semester || selectedAttendee.section) && (
+                    <InfoRow
+                      icon="clock"
+                      label="Semester & Section"
+                      value={`Sem: ${selectedAttendee.semester || "N/A"} | Sec: ${selectedAttendee.section || "N/A"}`}
+                      theme={theme}
+                    />
+                  )}
+                  <InfoRow
+                    icon="map-pin"
+                    label="University"
+                    value={selectedAttendee.university || "Unknown University"}
+                    theme={theme}
+                  />
+                </View>
 
                 <View style={styles.modalMetaRow}>
                   <View
@@ -369,7 +394,7 @@ export default function DirectoryModals({
                             Ticket scanned and claimed.
                           </Text>
 
-                          {/* NEW SCANNER NAME DISPLAY */}
+                          {/* SCANNER NAME DISPLAY */}
                           {selectedAttendee.scannerName ? (
                             <Text
                               style={[
@@ -499,14 +524,42 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginLeft: 6,
   },
-  detailName: { ...FONTS.header, fontSize: 28, marginBottom: 6 },
-  traceText: { ...FONTS.body, fontSize: 13, fontWeight: "500", lineHeight: 17 },
-  detailUniversity: {
-    ...FONTS.body,
-    fontSize: 16,
-    marginBottom: 16,
-    lineHeight: 22,
+  detailName: { ...FONTS.header, fontSize: 28, marginBottom: 16 },
+
+  infoCardsContainer: {
+    marginBottom: 24,
+    gap: 16,
   },
+  infoRowContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  iconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 16,
+  },
+  infoContent: {
+    flex: 1,
+    justifyContent: "center",
+  },
+  infoLabel: {
+    ...FONTS.body,
+    fontSize: 12,
+    fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  infoValue: {
+    ...FONTS.body,
+    fontSize: 15,
+    fontWeight: "500",
+  },
+
   modalMetaRow: {
     flexDirection: "row",
     alignItems: "center",

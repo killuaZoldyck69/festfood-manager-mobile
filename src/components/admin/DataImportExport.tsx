@@ -1,8 +1,9 @@
+import { QUERY_KEYS } from "@/constants/queryKeys";
 import { Feather, Ionicons } from "@expo/vector-icons";
+import { useQueryClient } from "@tanstack/react-query";
 import * as DocumentPicker from "expo-document-picker";
 import { File, Paths } from "expo-file-system";
 import * as FileSystemLegacy from "expo-file-system/legacy";
-import { useRouter } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 import * as Sharing from "expo-sharing";
 import React, { useState } from "react";
@@ -37,7 +38,7 @@ export default function DataImportExport({
   onAttendeesUpdated,
 }: Props): React.ReactElement {
   const theme = useTheme();
-  const router = useRouter();
+  const queryClient = useQueryClient();
 
   const [status, setStatus] = useState<UploadStatus>("idle");
   const [progress, setProgress] = useState<number>(0);
@@ -118,6 +119,10 @@ export default function DataImportExport({
       onAttendeesUpdated();
       setStatus("success");
       setPdfUri(null);
+
+      queryClient.invalidateQueries({ queryKey: ["attendees"] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.attendeeFilters });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.inventory });
     } catch (error) {
       setStatus("idle");
       showModal(
@@ -229,7 +234,27 @@ export default function DataImportExport({
   };
 
   const downloadSampleCsv = async (): Promise<void> => {
-    const csvContent = `name,email,studentId,university,role,category,semester,section\nStephanie Perez,stephanie.perez@yahoo.com,24-71529-2,"Independent University, Bangladesh",PARTICIPANT,Project Showcase,1st,C`;
+    const csvContent = `name,email,studentId,university,department,phoneNumber,role,category,semester,section
+Maria Hunt,maria.hunt@student.edu.bd,211-191-591,Shanto-Mariam University of Creative Technology,Pharmacy,01444003443,PARTICIPANT,General,6th,C
+Keith Merritt,keith.merritt@student.edu.bd,225-115-723,Green University of Bangladesh,Computer Science and Engineering (CSE),01542176891,PARTICIPANT,Hackathon,4th,C
+Earl Gomez,earl.gomez@student.edu.bd,222-138-472,"Independent University, Bangladesh",English,01888412882,PARTICIPANT,Project Showcase,5th,F
+Kenneth Conley,kenneth.conley@yahoo.com,215-177-899,American International University-Bangladesh,Law,01948223807,PARTICIPANT,Hackathon,3rd,A
+Antonio Walters,antonio.walters@yahoo.com,220-158-059,University of Dhaka,Software Engineering,01389203063,PARTICIPANT,Hackathon,9th,A
+David Lang,david.lang@gmail.com,22-67220-3,Islamic University of Technology,Pharmacy,01794369856,PARTICIPANT,Project Showcase,4th,B
+Henry Olson,henry.olson@gmail.com,211-191-637,Jahangirnagar University,Graphic Design,01343708118,PARTICIPANT,Robotics,1st,A
+Keith Sullivan,keith.sullivan@yahoo.com,18-60167-3,Military Institute of Science and Technology,Software Engineering,01438951351,PARTICIPANT,Gaming,4th,C
+Alexander Lewis,alexander.lewis@example.com,22-87529-2,North South University,Graphic Design,01419100180,PARTICIPANT,Gaming,5th,F
+Dalton Valdez,dalton.valdez@example.com,21-11647-1,University of Liberal Arts Bangladesh,Pharmacy,01974453356,PARTICIPANT,Robotics,11th,F
+Christopher Walton,christopher.walton@student.edu.bd,202-142-846,United International University,Electrical and Electronic Engineering (EEE),01967533494,PARTICIPANT,Robotics,11th,F
+Molly Russo,molly.russo@gmail.com,200-118-803,Military Institute of Science and Technology,Civil Engineering,01333609240,PARTICIPANT,Programming Contest,7th,F
+Jamie Phillips,jamie.phillips@example.com,22-37457-1,North South University,English,01483463656,PARTICIPANT,Hackathon,10th,C
+Susan Brown,susan.brown@example.com,18-14912-1,University of Dhaka,Pharmacy,01794912702,PARTICIPANT,Gaming,4th,B
+Michael Jacobs,michael.jacobs@gmail.com,20-39378-3,Bangladesh University of Engineering and Technology,English,01729740381,PARTICIPANT,Programming Contest,10th,B
+Danielle Lamb,danielle.lamb@student.edu.bd,221-170-965,American International University-Bangladesh,Graphic Design,01467269565,PARTICIPANT,Project Showcase,11th,E
+Troy Bates,troy.bates@example.com,221-120-183,American International University-Bangladesh,English,01882335018,PARTICIPANT,General,12th,B
+Laura Johnston,laura.johnston@yahoo.com,23-27827-3,Islamic University of Technology,English,01929108238,PARTICIPANT,Robotics,7th,A
+David Hunt,david.hunt@student.edu.bd,19-95443-2,Jahangirnagar University,Architecture,01418474966,PARTICIPANT,General,8th,E
+Kiara Miller,kiara.miller@example.com,22-47389-2,BRAC University,Architecture,01486693746,PARTICIPANT,Datathon,8th,A`;
     const filename = "Sample_Fest_Attendees.csv";
 
     if (Platform.OS === "web") {
@@ -435,6 +460,8 @@ export default function DataImportExport({
               <Text style={styles.codeText}>email</Text>,{" "}
               <Text style={styles.codeText}>studentId</Text>,{" "}
               <Text style={styles.codeText}>university</Text>,{" "}
+              <Text style={styles.codeText}>department</Text>,{" "}
+              <Text style={styles.codeText}>phoneNumber</Text>,{" "}
               <Text style={styles.codeText}>role</Text>,{" "}
               <Text style={styles.codeText}>category</Text>,{" "}
               <Text style={styles.codeText}>semester</Text>,{" "}
@@ -471,7 +498,7 @@ export default function DataImportExport({
               />
             </View>
             <Text style={[styles.dropzoneTitle, { color: theme.textMain }]}>
-              Tap to select CSV file
+              Tap to select CSV file (Max: 5 MB)
             </Text>
           </TouchableOpacity>
 

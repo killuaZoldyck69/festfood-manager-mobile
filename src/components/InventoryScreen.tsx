@@ -1,9 +1,8 @@
 import { Feather, Ionicons } from "@expo/vector-icons";
-import { useFocusEffect } from "expo-router";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   Image,
   Platform,
@@ -15,6 +14,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { QUERY_KEYS } from "../constants/queryKeys";
 import { FONTS, SIZES } from "../constants/theme";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../hooks/use-theme";
@@ -41,76 +41,58 @@ export default function InventoryScreen({
 }: InventoryScreenProps): React.ReactElement {
   const theme = useTheme();
   const { user, signOut } = useAuth();
-
-  const [stats, setStats] = useState<InventoryStats>(MOCK_STATS);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
-  const [errorState, setErrorState] = useState<string | null>(null);
-
   const [isModalVisible, setIsModalVisible] = useState<boolean>(false);
-
   const animatedProgress = useRef(new Animated.Value(0)).current;
 
-  const fetchInventory = async (): Promise<void> => {
-    setErrorState(null);
-    try {
-      const response = await apiClient("/inventory", {
-        method: "GET",
-      });
+  const {
+    data: stats = MOCK_STATS,
+    isLoading,
+    error,
+    refetch,
+    isRefetching,
+  } = useQuery({
+    queryKey: QUERY_KEYS.inventory,
+    queryFn: async () => {
+      const response = await apiClient("/inventory", { method: "GET" });
+      if (!response.ok) throw new Error("Failed to load inventory data");
+      return (await response.json()) as InventoryStats;
+    },
+    refetchInterval: 10000,
+  });
 
-      if (response.ok) {
-        const data = (await response.json()) as InventoryStats;
-        setStats({
-          totalParticipants:
-            data.totalParticipants ?? MOCK_STATS.totalParticipants,
-          totalAvailable: data.totalAvailable ?? MOCK_STATS.totalAvailable,
-          totalServed: data.totalServed ?? MOCK_STATS.totalServed,
-          duplicateScans: data.duplicateScans ?? MOCK_STATS.duplicateScans,
-          invalidTickets: data.invalidTickets ?? MOCK_STATS.invalidTickets,
-          percentageClaimed:
-            data.percentageClaimed ?? MOCK_STATS.percentageClaimed,
-        });
-      } else {
-        throw new Error("Failed to load inventory data");
-      }
-    } catch (error) {
-      setErrorState(error instanceof Error ? error.message : "Network error");
-    } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
-    }
-  };
+  const queryClient = useQueryClient();
 
-  useFocusEffect(
-    useCallback(() => {
-      fetchInventory();
-    }, []),
-  );
-
-  const onRefresh = (): void => {
-    setIsRefreshing(true);
-    fetchInventory();
-  };
-
-  const submitInventoryUpdate = async (newAvailable: number): Promise<void> => {
-    const previousAvailable = stats.totalAvailable;
-    setStats((prev) => ({ ...prev, totalAvailable: newAvailable }));
-
-    try {
+  const updateInventoryMutation = useMutation({
+    mutationFn: async (newAvailable: number) => {
       const response = await apiClient("/admin/inventory", {
         method: "PUT",
         body: JSON.stringify({ totalAvailable: newAvailable }),
       });
-
       if (!response.ok) throw new Error("Failed to update inventory.");
-    } catch (error) {
-      Alert.alert(
-        "Update Failed",
-        "Could not reach the server. Reverting value.",
+    },
+    onMutate: async (newAvailable) => {
+      await queryClient.cancelQueries({ queryKey: QUERY_KEYS.inventory });
+      const previousStats = queryClient.getQueryData<InventoryStats>(
+        QUERY_KEYS.inventory,
       );
-      setStats((prev) => ({ ...prev, totalAvailable: previousAvailable }));
-    }
-  };
+
+      if (previousStats) {
+        queryClient.setQueryData<InventoryStats>(QUERY_KEYS.inventory, {
+          ...previousStats,
+          totalAvailable: newAvailable,
+        });
+      }
+      return { previousStats };
+    },
+    onError: (err, newAvailable, context) => {
+      if (context?.previousStats) {
+        queryClient.setQueryData(QUERY_KEYS.inventory, context.previousStats);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.inventory });
+    },
+  });
 
   const progressPercentage =
     stats.totalParticipants === 0
@@ -178,7 +160,6 @@ export default function InventoryScreen({
               <Text style={styles.roleBadgeText}>{role}</Text>
             </View>
           </View>
-
           <TouchableOpacity onPress={signOut} style={styles.logoutBtn}>
             <Feather name="log-out" size={22} color={theme.error} />
           </TouchableOpacity>
@@ -190,8 +171,8 @@ export default function InventoryScreen({
         contentContainerStyle={styles.scrollContent}
         refreshControl={
           <RefreshControl
-            refreshing={isRefreshing}
-            onRefresh={onRefresh}
+            refreshing={isRefetching}
+            onRefresh={refetch}
             tintColor={theme.primary}
           />
         }
@@ -202,8 +183,8 @@ export default function InventoryScreen({
             color={theme.primary}
             style={{ marginTop: 40 }}
           />
-        ) : errorState ? (
-          <EmptyState icon="alert-octagon" message={errorState} />
+        ) : error ? (
+          <EmptyState icon="alert-octagon" message={error.message} />
         ) : (
           <>
             <View style={[styles.heroCard, { backgroundColor: theme.surface }]}>
@@ -408,7 +389,6 @@ export default function InventoryScreen({
               <Text style={[styles.creditsText, { color: theme.textMuted }]}>
                 FestFood Manager v1.0.0
               </Text>
-
               <View style={styles.developerRow}>
                 <Text
                   style={[
@@ -418,7 +398,6 @@ export default function InventoryScreen({
                 >
                   Developed by Ghost Team
                 </Text>
-
                 <Image
                   source={require("../../assets/images/developer-icon.jpg")}
                   style={styles.developerIcon}
@@ -426,7 +405,6 @@ export default function InventoryScreen({
                 />
               </View>
             </View>
-
             <View style={{ height: 100 }} />
           </>
         )}
@@ -437,7 +415,9 @@ export default function InventoryScreen({
           visible={isModalVisible}
           currentAvailable={stats.totalAvailable}
           onClose={() => setIsModalVisible(false)}
-          onSubmit={submitInventoryUpdate}
+          onSubmit={async (val) =>
+            await updateInventoryMutation.mutateAsync(val)
+          }
         />
       )}
     </SafeAreaView>

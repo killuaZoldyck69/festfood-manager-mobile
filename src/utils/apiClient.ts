@@ -1,5 +1,6 @@
 import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
+import Toast from "react-native-toast-message";
 import { API_URL, BASE_URL } from "../constants/api";
 
 export const apiClient = async (
@@ -30,11 +31,45 @@ export const apiClient = async (
     finalEndpoint = `${finalEndpoint}${separator}_cache=${Date.now()}`;
   }
 
-  return fetch(`${API_URL}${finalEndpoint}`, {
-    ...options,
-    credentials: "include",
-    headers,
-  });
+  try {
+    const response = await fetch(`${API_URL}${finalEndpoint}`, {
+      ...options,
+      credentials: "include",
+      headers,
+    });
+
+    if (!response.ok) {
+      if (response.status === 409 && endpoint.includes("/upload")) {
+        return response;
+      }
+
+      let errorMessage = "An unexpected error occurred.";
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.message || errorMessage;
+      } catch (e) {
+        errorMessage = `Server Error: ${response.status}`;
+      }
+
+      throw new Error(errorMessage);
+    }
+
+    return response;
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Network request failed";
+
+    if (options.method && options.method !== "GET") {
+      Toast.show({
+        type: "error",
+        text1: "Action Failed",
+        text2: message,
+        position: "bottom",
+      });
+    }
+
+    throw new Error(message);
+  }
 };
 
 export const uploadFile = async (

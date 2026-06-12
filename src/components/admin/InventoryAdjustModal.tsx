@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -10,6 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import Toast from "react-native-toast-message";
 import { Colors } from "../../constants/theme";
 
 interface InventoryAdjustModalProps {
@@ -37,13 +39,31 @@ export function InventoryAdjustModal({
     }
   }, [visible, currentAvailable]);
 
+  const adjustValue = (amount: number) => {
+    setInputValue((prev) => {
+      const current = parseInt(prev, 10) || 0;
+      const nextValue = Math.max(0, current + amount);
+      return String(nextValue);
+    });
+  };
+
   const handleSubmit = async (): Promise<void> => {
+    Keyboard.dismiss();
+
     const parsedValue = parseInt(inputValue, 10);
     if (isNaN(parsedValue) || parsedValue < 0) return;
 
     setIsSubmitting(true);
     try {
       await onSubmit(parsedValue);
+
+      Toast.show({
+        type: "success",
+        text1: "Inventory Updated",
+        text2: `Total available food set to ${parsedValue}.`,
+        position: "bottom",
+      });
+
       onClose();
     } finally {
       setIsSubmitting(false);
@@ -67,14 +87,36 @@ export function InventoryAdjustModal({
             Update the total number of food items available for this event.
           </Text>
 
-          <TextInput
-            style={styles.input}
-            value={inputValue}
-            onChangeText={setInputValue}
-            keyboardType="number-pad"
-            editable={!isSubmitting}
-            selectTextOnFocus
-          />
+          <View style={styles.inputRow}>
+            <TouchableOpacity
+              style={styles.quickAdjustBtn}
+              onPress={() => adjustValue(-10)}
+              disabled={isSubmitting}
+            >
+              <Text style={styles.quickAdjustText}>-10</Text>
+            </TouchableOpacity>
+
+            {/* FIX: Wrapped TextInput in a flex: 1 container to constrain width */}
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={styles.input}
+                value={inputValue}
+                onChangeText={setInputValue}
+                keyboardType="number-pad"
+                editable={!isSubmitting}
+                selectTextOnFocus
+                textAlign="center"
+              />
+            </View>
+
+            <TouchableOpacity
+              style={styles.quickAdjustBtn}
+              onPress={() => adjustValue(10)}
+              disabled={isSubmitting}
+            >
+              <Text style={styles.quickAdjustText}>+10</Text>
+            </TouchableOpacity>
+          </View>
 
           <View style={styles.buttonRow}>
             <TouchableOpacity
@@ -134,15 +176,41 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     lineHeight: 20,
   },
+  inputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 24,
+    width: "100%",
+  },
+  quickAdjustBtn: {
+    backgroundColor: `${Colors.light.primary}15`,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  quickAdjustText: {
+    color: Colors.light.primary,
+    fontSize: 16,
+    fontWeight: "800",
+  },
+  inputContainer: {
+    flex: 1,
+    marginHorizontal: 12,
+  },
   input: {
     borderWidth: 1,
     borderColor: Colors.light.border,
     borderRadius: 8,
-    padding: 16,
-    fontSize: 18,
+    padding: 12,
+    fontSize: 22,
+    fontWeight: "700",
     color: Colors.light.textMain,
-    marginBottom: 24,
     backgroundColor: Colors.light.background,
+    width: "100%",
   },
   buttonRow: {
     flexDirection: "row",

@@ -42,6 +42,34 @@ const LogCard = React.memo(({ item }: LogCardProps): React.ReactElement => {
   const theme = useTheme();
   const visual = getStatusVisuals(item.status, theme);
 
+  const renderInfoRow = (
+    icon: any,
+    text: string | null | undefined,
+    isMain: boolean = false,
+  ) => {
+    if (!text) return null;
+    return (
+      <View style={styles.infoRow}>
+        <View style={styles.iconWrapper}>
+          <Feather
+            name={icon}
+            size={isMain ? 14 : 12}
+            color={isMain ? theme.textMain : theme.textMuted}
+          />
+        </View>
+        <Text
+          style={[
+            isMain ? styles.attendeeName : styles.subText,
+            { color: isMain ? theme.textMain : theme.textMuted, flex: 1 },
+          ]}
+          numberOfLines={1}
+        >
+          {text}
+        </Text>
+      </View>
+    );
+  };
+
   return (
     <View style={[styles.logCard, { backgroundColor: theme.surface }]}>
       <View style={styles.logHeader}>
@@ -61,37 +89,27 @@ const LogCard = React.memo(({ item }: LogCardProps): React.ReactElement => {
           <Text style={[styles.label, { color: theme.textMuted }]}>
             ATTENDEE
           </Text>
-          <Text
-            style={[styles.attendeeName, { color: theme.textMain }]}
-            numberOfLines={1}
-          >
-            {item.attendeeName || "Unknown / Invalid Token"}
-          </Text>
 
-          {item.attendeeEmail ? (
-            <Text
-              style={[styles.subText, { color: theme.textMuted }]}
-              numberOfLines={1}
-            >
-              {item.attendeeEmail}
-            </Text>
-          ) : null}
-
-          {item.studentId ? (
-            <Text style={[styles.subText, { color: theme.textMuted }]}>
-              ID: {item.studentId}{" "}
-              {item.section ? `• Sec: ${item.section}` : ""}
-            </Text>
-          ) : null}
-
-          {item.university ? (
-            <Text
-              style={[styles.subText, { color: theme.textMuted }]}
-              numberOfLines={1}
-            >
-              {item.university}
-            </Text>
-          ) : null}
+          {/* ALL ATTENDEE INFO RENDERED HERE */}
+          {renderInfoRow(
+            "user",
+            item.attendeeName || "Unknown / Invalid Token",
+            true,
+          )}
+          {renderInfoRow("phone", item.phoneNumber)}
+          {renderInfoRow("mail", item.attendeeEmail)}
+          {renderInfoRow(
+            "credit-card",
+            item.studentId ? `ID: ${item.studentId}` : null,
+          )}
+          {/* {renderInfoRow("layers", item.department)}
+          {renderInfoRow(
+            "clock",
+            item.semester || item.section
+              ? `Sem: ${item.semester || "N/A"} ${item.section ? `• Sec: ${item.section}` : ""}`
+              : null,
+          )}
+          {renderInfoRow("map-pin", item.university)} */}
 
           {item.category ? (
             <View
@@ -100,6 +118,12 @@ const LogCard = React.memo(({ item }: LogCardProps): React.ReactElement => {
                 { backgroundColor: `${theme.primary}15` },
               ]}
             >
+              <Feather
+                name="tag"
+                size={10}
+                color={theme.primary}
+                style={{ marginRight: 4 }}
+              />
               <Text
                 style={[styles.categoryBadgeText, { color: theme.primary }]}
               >
@@ -115,20 +139,9 @@ const LogCard = React.memo(({ item }: LogCardProps): React.ReactElement => {
           <Text style={[styles.label, { color: theme.textMuted }]}>
             ACTION BY
           </Text>
-          <Text
-            style={[styles.attendeeName, { color: theme.textMain }]}
-            numberOfLines={1}
-          >
-            {item.volunteerName || "System"}
-          </Text>
-          {item.volunteerEmail ? (
-            <Text
-              style={[styles.subText, { color: theme.textMuted }]}
-              numberOfLines={1}
-            >
-              {item.volunteerEmail}
-            </Text>
-          ) : null}
+
+          {renderInfoRow("shield", item.volunteerName || "System", true)}
+          {renderInfoRow("mail", item.volunteerEmail)}
         </View>
       </View>
     </View>
@@ -181,25 +194,38 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "700",
     letterSpacing: 1,
+    marginBottom: 8,
+  },
+
+  infoRow: {
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: 6,
+  },
+  iconWrapper: {
+    width: 20,
+    alignItems: "flex-start",
+    justifyContent: "center",
   },
   attendeeName: {
     ...FONTS.body,
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "700",
-    marginBottom: 4,
   },
   subText: {
     ...FONTS.body,
     fontSize: 12,
-    marginBottom: 2,
   },
+
   categoryBadge: {
+    flexDirection: "row",
+    alignItems: "center",
     alignSelf: "flex-start",
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 4,
     marginTop: 6,
+    marginLeft: 0,
   },
   categoryBadgeText: {
     ...FONTS.body,

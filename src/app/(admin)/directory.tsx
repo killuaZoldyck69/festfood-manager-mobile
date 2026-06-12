@@ -9,54 +9,76 @@ import DirectoryFilters, {
 import DirectoryModals, {
   ErrorModalInfo,
 } from "@/components/directory/DirectoryModals";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import Toast from "react-native-toast-message";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { PaginationFooter } from "../../components/ui/PaginationFooter";
+import { QUERY_KEYS } from "../../constants/queryKeys";
 import { FONTS, SIZES } from "../../constants/theme";
-import { useApiFetch } from "../../hooks/use-api-fetch";
 import { useTheme } from "../../hooks/use-theme";
 import { AttendeeListItem } from "../../types";
 import { apiClient } from "../../utils/apiClient";
 
 export default function AdminDirectoryScreen(): React.ReactElement {
   const theme = useTheme();
+  const queryClient = useQueryClient();
 
   const [activeTab, setActiveTab] = useState<string>("ALL");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [selectedCategory, setSelectedCategory] = useState<string>("ALL");
   const [selectedUniversity, setSelectedUniversity] = useState<string>("ALL");
-  const [filterOptions, setFilterOptions] =
-    useState<DirectoryFilterAggregation>({
-      categories: [],
-      universities: [],
-    });
+
+  const [page, setPage] = useState<number>(1);
 
   useEffect(() => {
-    const fetchFilters = async () => {
-      try {
+    setPage(1);
+  }, [activeTab, searchQuery, selectedCategory, selectedUniversity]);
+
+  const { data: filterOptions = { categories: [], universities: [] } } =
+    useQuery<DirectoryFilterAggregation>({
+      queryKey: QUERY_KEYS.attendeeFilters,
+      queryFn: async () => {
         const response = await apiClient("/admin/attendees/filters");
-        if (response.ok) {
-          const json = await response.json();
-          setFilterOptions(json.data || json);
-        }
-      } catch (err) {
-        // Silently fail and leave options empty if the network request drops
-      }
-    };
+        if (!response.ok) return { categories: [], universities: [] };
+        const json = await response.json();
+        return json.data || json;
+      },
+      staleTime: Infinity,
+    });
 
-    fetchFilters();
-  }, []);
-
-  const params: Record<string, string> = {
+  const activeParams: Record<string, string> = {
     ...(activeTab !== "ALL" && { status: activeTab }),
     ...(selectedCategory !== "ALL" && { category: selectedCategory }),
     ...(selectedUniversity !== "ALL" && { university: selectedUniversity }),
     ...(searchQuery.trim() !== "" && { search: searchQuery.trim() }),
   };
 
-  const { data, meta, isLoading, error, fetch } = useApiFetch<AttendeeListItem>(
-    "/admin/attendees",
-    params,
-  );
+  const {
+    data: attendeesData,
+    isLoading,
+    error,
+  } = useQuery({
+    queryKey: QUERY_KEYS.attendees({ ...activeParams, page: String(page) }),
+    queryFn: async () => {
+      const queryParams = new URLSearchParams({ page: String(page) });
+      Object.entries(activeParams).forEach(([key, val]) =>
+        queryParams.append(key, val),
+      );
+
+      const res = await apiClient(`/admin/attendees?${queryParams.toString()}`);
+      if (!res.ok) throw new Error("Failed to fetch attendees");
+      return await res.json();
+    },
+  });
+
+  const data: AttendeeListItem[] = attendeesData?.data || [];
+  const meta = attendeesData?.meta || {
+    total: 0,
+    page: 1,
+    limit: 10,
+    totalPages: 1,
+    hasMore: false,
+  };
 
   const [selectedAttendee, setSelectedAttendee] =
     useState<AttendeeListItem | null>(null);
@@ -66,13 +88,11 @@ export default function AdminDirectoryScreen(): React.ReactElement {
     null,
   );
 
-  const handleManualClaim = async (): Promise<void> => {
-    if (!claimConfirmAttendee) return;
-
-    try {
+  const overrideMutation = useMutation({
+    mutationFn: async (attendeeId: string) => {
       const response = await apiClient("/admin/override", {
         method: "POST",
-        body: JSON.stringify({ attendeeId: claimConfirmAttendee.id }),
+        body: JSON.stringify({ attendeeId }),
       });
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -82,11 +102,25 @@ export default function AdminDirectoryScreen(): React.ReactElement {
         }
         throw new Error("Failed to process claim.");
       }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["attendees"] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.inventory });
+      queryClient.invalidateQueries({ queryKey: ["logs"] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.logFilters });
+
       setClaimConfirmAttendee(null);
-      fetch(meta.page);
-    } catch (err) {
+
+      Toast.show({
+        type: "success",
+        text1: "Claim Successful",
+        text2: "Attendee ticket manually marked as claimed.",
+        position: "bottom",
+      });
+    },
+    onError: (err) => {
       setClaimConfirmAttendee(null);
-      if (err instanceof Error && err.message === "OUT_OF_STOCK") {
+      if (err.message === "OUT_OF_STOCK") {
         setErrorModalInfo({
           title: "Out of Stock",
           message:
@@ -100,8 +134,8 @@ export default function AdminDirectoryScreen(): React.ReactElement {
           type: "ERROR",
         });
       }
-    }
-  };
+    },
+  });
 
   return (
     <SafeAreaView
@@ -113,7 +147,7 @@ export default function AdminDirectoryScreen(): React.ReactElement {
           Attendee Directory
         </Text>
         <Text style={[styles.totalLogs, { color: theme.textMuted }]}>
-          {meta?.total || 0} Registered
+          {meta.total} Registered
         </Text>
       </View>
 
@@ -137,7 +171,7 @@ export default function AdminDirectoryScreen(): React.ReactElement {
         />
 
         {error ? (
-          <EmptyState icon="alert-octagon" message={error} />
+          <EmptyState icon="alert-octagon" message={error.message} />
         ) : isLoading && data.length === 0 ? (
           <EmptyState icon="search" message="Loading attendees..." />
         ) : data.length === 0 ? (
@@ -158,9 +192,9 @@ export default function AdminDirectoryScreen(): React.ReactElement {
             ))}
             <PaginationFooter
               meta={meta}
-              isLoading={isLoading}
-              onPrev={() => fetch(meta.page - 1)}
-              onNext={() => fetch(meta.page + 1)}
+              isLoading={isLoading || overrideMutation.isPending}
+              onPrev={() => setPage((p) => Math.max(1, p - 1))}
+              onNext={() => setPage((p) => p + 1)}
             />
           </ScrollView>
         )}
@@ -173,7 +207,10 @@ export default function AdminDirectoryScreen(): React.ReactElement {
         setClaimConfirmAttendee={setClaimConfirmAttendee}
         errorModalInfo={errorModalInfo}
         setErrorModalInfo={setErrorModalInfo}
-        handleManualClaim={handleManualClaim}
+        handleManualClaim={() =>
+          claimConfirmAttendee &&
+          overrideMutation.mutate(claimConfirmAttendee.id)
+        }
       />
     </SafeAreaView>
   );
@@ -188,7 +225,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
   },
-  headerTitle: { ...FONTS.header, fontSize: 28 },
+  headerTitle: { ...FONTS.header, fontSize: 26 },
   totalLogs: { ...FONTS.body, fontWeight: "600" },
   list: { flex: 1, paddingHorizontal: SIZES.padding },
 });

@@ -1,38 +1,59 @@
 import LogFilters, { FilterTab } from "@/components/logs/LogFilters";
 import VolunteerLogCard from "@/components/logs/VolunteerLogCard";
+import { useQuery } from "@tanstack/react-query";
 import React, { useEffect, useState } from "react";
 import { FlatList, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { PaginationFooter } from "../../components/ui/PaginationFooter";
+import { QUERY_KEYS } from "../../constants/queryKeys";
 import { FONTS, SIZES } from "../../constants/theme";
-import { useApiFetch } from "../../hooks/use-api-fetch";
 import { useTheme } from "../../hooks/use-theme";
 import { FormattedLog } from "../../types";
+import { apiClient } from "../../utils/apiClient";
 
 export default function VolunteerLogsScreen(): React.ReactElement {
   const theme = useTheme();
 
   const [activeTab, setActiveTab] = useState<FilterTab>("ALL");
   const [searchQuery, setSearchQuery] = useState<string>("");
+  const [page, setPage] = useState<number>(1);
 
-  const params: Record<string, string> = {
+  useEffect(() => {
+    setPage(1);
+  }, [activeTab, searchQuery]);
+
+  const activeParams: Record<string, string> = {
     ...(activeTab !== "ALL" && { status: activeTab }),
     ...(searchQuery.trim() !== "" && { search: searchQuery.trim() }),
   };
 
-  const { data, meta, isLoading, error, fetch } = useApiFetch<FormattedLog>(
-    "/volunteer/logs",
-    params,
-  );
+  const {
+    data: logsData,
+    isLoading,
+    error,
+  } = useQuery({
+    queryKey: QUERY_KEYS.volunteerLogs({ ...activeParams, page: String(page) }),
+    queryFn: async () => {
+      const queryParams = new URLSearchParams({ page: String(page) });
+      Object.entries(activeParams).forEach(([key, val]) =>
+        queryParams.append(key, val),
+      );
 
-  useEffect(() => {
-    const delayDebounceFn = setTimeout(() => {
-      fetch(1);
-    }, 300);
+      const res = await apiClient(`/volunteer/logs?${queryParams.toString()}`);
+      if (!res.ok) throw new Error("Failed to fetch logs");
+      return await res.json();
+    },
+  });
 
-    return () => clearTimeout(delayDebounceFn);
-  }, [activeTab, searchQuery]);
+  const data: FormattedLog[] = logsData?.data || [];
+  const meta = logsData?.meta || {
+    total: 0,
+    page: 1,
+    limit: 10,
+    totalPages: 1,
+    hasMore: false,
+  };
 
   return (
     <SafeAreaView
@@ -44,7 +65,7 @@ export default function VolunteerLogsScreen(): React.ReactElement {
           My Recent Scans
         </Text>
         <Text style={[styles.totalLogs, { color: theme.textMuted }]}>
-          {meta?.total || 0} Records
+          {meta.total} Records
         </Text>
       </View>
 
@@ -67,7 +88,7 @@ export default function VolunteerLogsScreen(): React.ReactElement {
       />
 
       {error ? (
-        <EmptyState icon="alert-octagon" message={error} />
+        <EmptyState icon="alert-octagon" message={error.message} />
       ) : isLoading && data.length === 0 ? (
         <EmptyState icon="search" message="Loading logs..." />
       ) : data.length === 0 ? (
@@ -83,8 +104,8 @@ export default function VolunteerLogsScreen(): React.ReactElement {
             <PaginationFooter
               meta={meta}
               isLoading={isLoading}
-              onPrev={() => fetch(meta.page - 1)}
-              onNext={() => fetch(meta.page + 1)}
+              onPrev={() => setPage((p) => Math.max(1, p - 1))}
+              onNext={() => setPage((p) => p + 1)}
             />
           }
         />

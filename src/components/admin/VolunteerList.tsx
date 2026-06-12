@@ -1,121 +1,93 @@
 import { Feather } from "@expo/vector-icons";
-import { useFocusEffect } from "expo-router";
-import React, { useCallback, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import React, { useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
-  Modal,
-  Platform,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import Toast from "react-native-toast-message";
+import { QUERY_KEYS } from "../../constants/queryKeys";
 import { FONTS, SIZES } from "../../constants/theme";
 import { useTheme } from "../../hooks/use-theme";
 import { VolunteerListItem } from "../../types";
 import { apiClient } from "../../utils/apiClient";
 import { EmptyState } from "../ui/EmptyState";
+import AddVolunteerModal from "./AddVolunteerModal";
+import DeleteVolunteerModal from "./DeleteVolunteerModal";
 
 export default function VolunteerList(): React.ReactElement {
   const theme = useTheme();
-  const [volunteers, setVolunteers] = useState<VolunteerListItem[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [errorState, setErrorState] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
   const [modalVisible, setModalVisible] = useState<boolean>(false);
-  const [form, setForm] = useState({ name: "", email: "", password: "" });
-  const [showPassword, setShowPassword] = useState<boolean>(false);
-
   const [deleteModal, setDeleteModal] = useState<{
     visible: boolean;
     id: string;
     name: string;
-  }>({ visible: false, id: "", name: "" });
+  }>({
+    visible: false,
+    id: "",
+    name: "",
+  });
 
-  const fetchVolunteers = async (): Promise<void> => {
-    setIsLoading(true);
-    setErrorState(null);
-    try {
+  const {
+    data: volunteers = [],
+    isLoading,
+    error,
+  } = useQuery({
+    queryKey: QUERY_KEYS.volunteers,
+    queryFn: async () => {
       const res = await apiClient("/admin/volunteers");
+      if (!res.ok) throw new Error("Failed to fetch volunteers");
       const json = await res.json();
-      if (res.ok && Array.isArray(json.data)) {
-        setVolunteers(json.data);
-      } else {
-        throw new Error("Failed to fetch volunteers");
-      }
-    } catch (err) {
-      setErrorState(err instanceof Error ? err.message : "Network Error");
-    } finally {
-      setIsLoading(false);
-    }
-  };
+      return json.data as VolunteerListItem[];
+    },
+  });
 
-  useFocusEffect(
-    useCallback(() => {
-      fetchVolunteers();
-    }, []),
-  );
-
-  const handleAddVolunteer = async (): Promise<void> => {
-    if (!form.name || !form.email || !form.password) {
-      Alert.alert("Missing Fields", "Please fill out all fields.");
-      return;
-    }
-    setActionLoading("ADD_VOLUNTEER");
-    try {
+  const addMutation = useMutation({
+    mutationFn: async (newVolunteer: any) => {
       const res = await apiClient("/admin/volunteers", {
         method: "POST",
-        body: JSON.stringify(form),
+        body: JSON.stringify(newVolunteer),
       });
-      if (res.ok) {
-        closeModal();
-        fetchVolunteers();
-      } else {
+      if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.message || "Failed to add volunteer.");
       }
-    } catch (error) {
-      Alert.alert(
-        "Error",
-        error instanceof Error ? error.message : "Unknown error",
-      );
-    } finally {
-      setActionLoading(null);
-    }
-  };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.volunteers });
+      setModalVisible(false);
+      Toast.show({
+        type: "success",
+        text1: "Success",
+        text2: "Volunteer account created.",
+        position: "bottom",
+      });
+    },
+  });
 
-  const confirmDelete = async (): Promise<void> => {
-    if (!deleteModal.id) return;
-    setActionLoading(`DELETE_${deleteModal.id}`);
-
-    try {
-      const res = await apiClient(`/admin/volunteers/${deleteModal.id}`, {
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiClient(`/admin/volunteers/${id}`, {
         method: "DELETE",
       });
-      if (res.ok) {
-        setVolunteers((prev) => prev.filter((v) => v.id !== deleteModal.id));
-        setDeleteModal({ visible: false, id: "", name: "" });
-      } else {
-        throw new Error("Failed to delete volunteer.");
-      }
-    } catch (error) {
-      Alert.alert(
-        "Error",
-        error instanceof Error ? error.message : "Unknown error",
-      );
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  const closeModal = (): void => {
-    setModalVisible(false);
-    setForm({ name: "", email: "", password: "" });
-    setShowPassword(false);
-  };
+      if (!res.ok) throw new Error("Failed to delete volunteer.");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.volunteers });
+      setDeleteModal({ visible: false, id: "", name: "" });
+      Toast.show({
+        type: "success",
+        text1: "Removed",
+        text2: "Volunteer access revoked.",
+        position: "bottom",
+      });
+    },
+  });
 
   return (
     <View>
@@ -136,10 +108,10 @@ export default function VolunteerList(): React.ReactElement {
         <ActivityIndicator
           size="large"
           color={theme.primary}
-          style={styles.loader}
+          style={{ marginVertical: 40 }}
         />
-      ) : errorState ? (
-        <EmptyState icon="alert-octagon" message={errorState} />
+      ) : error ? (
+        <EmptyState icon="alert-octagon" message={error.message} />
       ) : volunteers.length === 0 ? (
         <View style={[styles.emptyCard, { backgroundColor: theme.surface }]}>
           <Text style={{ color: theme.textMuted, ...FONTS.body }}>
@@ -155,7 +127,6 @@ export default function VolunteerList(): React.ReactElement {
               { backgroundColor: theme.surface, borderColor: theme.border },
             ]}
           >
-            {/* Top Row: User Info & Actions */}
             <View style={styles.cardHeaderRow}>
               <View style={styles.volInfo}>
                 <Text style={[styles.volName, { color: theme.textMain }]}>
@@ -174,9 +145,13 @@ export default function VolunteerList(): React.ReactElement {
                 onPress={() =>
                   setDeleteModal({ visible: true, id: vol.id, name: vol.name })
                 }
-                disabled={actionLoading === `DELETE_${vol.id}`}
+                disabled={
+                  deleteMutation.isPending &&
+                  deleteMutation.variables === vol.id
+                }
               >
-                {actionLoading === `DELETE_${vol.id}` ? (
+                {deleteMutation.isPending &&
+                deleteMutation.variables === vol.id ? (
                   <ActivityIndicator size="small" color={theme.error} />
                 ) : (
                   <Feather name="trash-2" size={16} color={theme.error} />
@@ -184,7 +159,6 @@ export default function VolunteerList(): React.ReactElement {
               </TouchableOpacity>
             </View>
 
-            {/* Bottom Row: Detailed Statistics Grid */}
             <View style={[styles.statsGrid, { borderTopColor: theme.border }]}>
               <View style={styles.statBox}>
                 <Feather name="layers" size={14} color={theme.textMuted} />
@@ -195,7 +169,6 @@ export default function VolunteerList(): React.ReactElement {
                   Total
                 </Text>
               </View>
-
               <View style={styles.statBox}>
                 <Feather name="check-circle" size={14} color={theme.success} />
                 <Text style={[styles.statValue, { color: theme.textMain }]}>
@@ -205,7 +178,6 @@ export default function VolunteerList(): React.ReactElement {
                   Success
                 </Text>
               </View>
-
               <View style={styles.statBox}>
                 <Feather name="copy" size={14} color={theme.error} />
                 <Text style={[styles.statValue, { color: theme.textMain }]}>
@@ -215,7 +187,6 @@ export default function VolunteerList(): React.ReactElement {
                   Dupe
                 </Text>
               </View>
-
               <View style={styles.statBox}>
                 <Feather name="alert-triangle" size={14} color="#F59E0B" />
                 <Text style={[styles.statValue, { color: theme.textMain }]}>
@@ -230,177 +201,23 @@ export default function VolunteerList(): React.ReactElement {
         ))
       )}
 
-      {/* --- ADD VOLUNTEER MODAL --- */}
-      <Modal
+      <AddVolunteerModal
         visible={modalVisible}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={closeModal}
-      >
-        <View style={styles.modalOverlay}>
-          <View
-            style={[styles.modalContent, { backgroundColor: theme.background }]}
-          >
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: theme.textMain }]}>
-                Add Volunteer
-              </Text>
-              <TouchableOpacity onPress={closeModal}>
-                <Feather name="x" size={24} color={theme.textMain} />
-              </TouchableOpacity>
-            </View>
+        onClose={() => setModalVisible(false)}
+        onSubmit={(data) => addMutation.mutate(data)}
+        isPending={addMutation.isPending}
+      />
 
-            <TextInput
-              style={[
-                styles.input,
-                {
-                  backgroundColor: theme.surface,
-                  color: theme.textMain,
-                  borderColor: theme.border,
-                },
-              ]}
-              placeholder="Full Name"
-              placeholderTextColor={theme.textMuted}
-              value={form.name}
-              onChangeText={(txt) => setForm({ ...form, name: txt })}
-            />
-            <TextInput
-              style={[
-                styles.input,
-                {
-                  backgroundColor: theme.surface,
-                  color: theme.textMain,
-                  borderColor: theme.border,
-                },
-              ]}
-              placeholder="Email Address"
-              placeholderTextColor={theme.textMuted}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              value={form.email}
-              onChangeText={(txt) => setForm({ ...form, email: txt })}
-            />
-
-            <View
-              style={[
-                styles.passwordContainer,
-                {
-                  backgroundColor: theme.surface,
-                  borderColor: theme.border,
-                },
-              ]}
-            >
-              <TextInput
-                style={[styles.passwordInput, { color: theme.textMain }]}
-                placeholder="Password"
-                placeholderTextColor={theme.textMuted}
-                secureTextEntry={!showPassword}
-                value={form.password}
-                onChangeText={(txt) => setForm({ ...form, password: txt })}
-              />
-              <TouchableOpacity
-                style={styles.eyeIcon}
-                onPress={() => setShowPassword(!showPassword)}
-              >
-                <Feather
-                  name={showPassword ? "eye" : "eye-off"}
-                  size={20}
-                  color={theme.textMuted}
-                />
-              </TouchableOpacity>
-            </View>
-
-            <TouchableOpacity
-              style={[styles.submitButton, { backgroundColor: theme.primary }]}
-              onPress={handleAddVolunteer}
-              disabled={actionLoading === "ADD_VOLUNTEER"}
-            >
-              {actionLoading === "ADD_VOLUNTEER" ? (
-                <ActivityIndicator color="#FFF" />
-              ) : (
-                <Text style={styles.submitButtonText}>Create Account</Text>
-              )}
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
-      {/* --- DELETE CONFIRMATION MODAL --- */}
-      <Modal
-        animationType="fade"
-        transparent
+      <DeleteVolunteerModal
         visible={deleteModal.visible}
-        onRequestClose={() => {
-          if (!actionLoading)
-            setDeleteModal({ ...deleteModal, visible: false });
-        }}
-      >
-        <View style={styles.centerModalOverlay}>
-          <View
-            style={[
-              styles.confirmModalCard,
-              { backgroundColor: theme.background },
-            ]}
-          >
-            <View
-              style={[
-                styles.warningIconBg,
-                { backgroundColor: `${theme.error}15` },
-              ]}
-            >
-              <Feather name="user-x" size={32} color={theme.error} />
-            </View>
-
-            <Text
-              style={[
-                styles.confirmModalTitle,
-                { color: theme.textMain, textAlign: "center" },
-              ]}
-            >
-              Remove Volunteer?
-            </Text>
-
-            <Text style={[styles.confirmModalText, { color: theme.textMuted }]}>
-              Are you sure you want to revoke access for{" "}
-              <Text style={{ fontWeight: "700", color: theme.textMain }}>
-                {deleteModal.name}
-              </Text>
-              ? Their past scan records will remain, but they will no longer be
-              able to log in.
-            </Text>
-
-            <View style={styles.confirmModalActions}>
-              <TouchableOpacity
-                style={[
-                  styles.confirmBtn,
-                  styles.cancelBtn,
-                  { borderColor: theme.border },
-                ]}
-                onPress={() =>
-                  setDeleteModal({ ...deleteModal, visible: false })
-                }
-                disabled={!!actionLoading}
-              >
-                <Text style={[styles.cancelBtnText, { color: theme.textMain }]}>
-                  Cancel
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.confirmBtn, { backgroundColor: theme.error }]}
-                onPress={confirmDelete}
-                disabled={!!actionLoading}
-              >
-                {actionLoading ? (
-                  <ActivityIndicator color="#FFF" />
-                ) : (
-                  <Text style={styles.acceptBtnText}>Remove</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+        volunteerName={deleteModal.name}
+        onClose={() =>
+          !deleteMutation.isPending &&
+          setDeleteModal({ ...deleteModal, visible: false })
+        }
+        onConfirm={() => deleteMutation.mutate(deleteModal.id)}
+        isPending={deleteMutation.isPending}
+      />
     </View>
   );
 }
@@ -427,7 +244,6 @@ const styles = StyleSheet.create({
     marginLeft: 6,
     fontSize: 13,
   },
-  loader: { marginTop: 40, marginBottom: 40 },
   emptyCard: {
     padding: 20,
     borderRadius: SIZES.radius,
@@ -435,7 +251,6 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   volunteerCard: {
-    flexDirection: "column",
     padding: 16,
     borderRadius: SIZES.radius,
     borderWidth: 1,
@@ -468,10 +283,7 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     borderTopWidth: 1,
   },
-  statBox: {
-    alignItems: "center",
-    flex: 1,
-  },
+  statBox: { alignItems: "center", flex: 1 },
   statValue: {
     ...FONTS.body,
     fontSize: 15,
@@ -485,113 +297,5 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     textTransform: "uppercase",
     letterSpacing: 0.5,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "flex-end",
-  },
-  modalContent: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: SIZES.padding,
-    paddingBottom: Platform.OS === "ios" ? 40 : 24,
-    minHeight: "50%",
-  },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 24,
-    marginTop: 8,
-  },
-  modalTitle: { ...FONTS.header, fontSize: 22 },
-  input: {
-    ...FONTS.body,
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    fontSize: 16,
-  },
-  passwordContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1,
-    borderRadius: 12,
-    marginBottom: 16,
-  },
-  passwordInput: {
-    flex: 1,
-    ...FONTS.body,
-    padding: 16,
-    fontSize: 16,
-  },
-  eyeIcon: {
-    padding: 16,
-  },
-  submitButton: {
-    height: 56,
-    borderRadius: SIZES.radius,
-    justifyContent: "center",
-    alignItems: "center",
-    marginTop: 8,
-  },
-  submitButtonText: {
-    color: "#FFF",
-    ...FONTS.body,
-    fontWeight: "700",
-    fontSize: 16,
-  },
-
-  centerModalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: SIZES.padding,
-  },
-  confirmModalCard: {
-    width: "100%",
-    padding: 24,
-    borderRadius: 24,
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 10,
-  },
-  warningIconBg: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  confirmModalTitle: { ...FONTS.header, fontSize: 22, marginBottom: 8 },
-  confirmModalText: {
-    ...FONTS.body,
-    fontSize: 15,
-    textAlign: "center",
-    lineHeight: 22,
-    marginBottom: 24,
-  },
-  confirmModalActions: { flexDirection: "row", width: "100%", gap: 12 },
-  confirmBtn: {
-    flex: 1,
-    height: 50,
-    borderRadius: SIZES.radius,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  cancelBtn: { borderWidth: 1 },
-  cancelBtnText: { ...FONTS.body, fontWeight: "600", fontSize: 15 },
-  acceptBtnText: {
-    color: "#FFF",
-    ...FONTS.body,
-    fontWeight: "700",
-    fontSize: 15,
   },
 });

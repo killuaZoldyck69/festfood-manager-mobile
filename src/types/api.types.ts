@@ -17,6 +17,8 @@ export interface AttendeeListItem {
   email: string;
   studentId: string;
   university: string;
+  department: string;
+  phoneNumber: string;
   role: string;
   category: string;
   semester: string;
@@ -47,6 +49,8 @@ export interface FormattedLog {
   studentId: string | null;
   category: string | null;
   university: string | null;
+  department: string | null;
+  phoneNumber: string | null;
   semester: string | null;
   section: string | null;
 }
